@@ -1,0 +1,208 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+<HEAD>
+  <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=koi8-r">
+  <META HTTP-EQUIV="Content-Language" CONTENT="ru">
+  <META NAME="copyright" CONTENT="Copyright (c) 2008 by OpenBSD.ru">
+  <TITLE>VPN на базе SSH</TITLE>
+  <link rel="stylesheet" type="text/css" href="style.css" tppabs="http://www.openbsd.ru/style.css">
+</HEAD>
+
+<BODY>
+
+<H2>VPN на базе SSH</H2>
+<HR>
+
+<H3>Мини-руководство "шаг за шагом"</H3>
+
+<P>
+<TABLE BORDER="0">
+<TR><TD>
+
+<P>
+Для примера возьмем два сервера: srv1 с IP-адресами 212.34.XX.YY и
+192.168.2.1 подключен к сегменту внутренней сети 192.168.2.0/24, а srv2
+с 213.167.XX.YY и 192.168.1.1 шефствует над подопечными из 192.168.1.0/24.
+Настроим VPN-туннель средствами OpenSSH, в котором будут использоваться
+адреса 10.0.0.1 и 10.0.0.2. Для наглядности сценарий можно представить
+следующим образом:
+
+<PRE>
+     (10.0.0.1) 212.34.XX.YY            213.167.XX.YY (10.0.0.2)
+192.168.2.0/24 --- srv1 --- [ internet ] --- srv2 --- 192.168.1.0/24
+                192.168.2.1               192.168.1.1
+</PRE>
+
+<P>
+Ключевые элементы сетевой конфигурации рассмотрены, теперь приступаем к
+настройкам. Логинимся на srv1 и правим главный конфигурационный файл <A
+HREF="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=sshd&sektion=8  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=sshd&sektion=8'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=sshd&sektion=8">
+sshd(8)</A>:
+
+<PRE>
+srv1# <STRONG>vi /etc/ssh/sshd_config</STRONG>
+
+# Разрешаем туннелирование layer-3
+#
+PermitTunnel point-to-point
+
+# VPN на базе OpenSSH требует привилегий суперпользователя,
+# поэтому аутентификацию под учетной записью root разрешаем
+# только с доверенных хостов
+#
+PermitRootLogin no
+Match Host 213.167.XX.YY,192.168.2.*,127.0.0.1
+	PermitRootLogin yes
+</PRE>
+
+<P>
+По окончании настроек не забываем отправить демону сигнал SIGHUP, чтобы он
+смог перечитать свой конфиг:
+
+<PRE>
+srv1# <STRONG>kill -HUP `sed q /var/run/sshd.pid`</STRONG>
+</PRE>
+
+<P>
+Далее разрешаем прохождение пакетов на используемых туннельных
+псевдоустройствах <A
+HREF="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=tun&sektion=4  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=tun&sektion=4'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=tun&sektion=4">
+tun(4)</A> (на tun0 у меня висит OpenVPN, tun1 - для OpenSSH):
+
+<PRE>
+srv1# <STRONG>vi /etc/pf.conf</STRONG>
+pass quick on { tun0, tun1 } inet all
+</PRE>
+
+<P>
+Загружаем правила из конфига:
+
+<PRE>
+srv1# <STRONG>pfctl -f /etc/pf.conf</STRONG>
+</PRE>
+
+<P>
+Создаем интерфейс tun1 и назначаем ему IP-адрес:
+
+<PRE>
+srv1# <STRONG>ifconfig tun1 create</STRONG>
+srv1# <STRONG>ifconfig tun1 10.0.0.1 10.0.0.2 netmask 255.255.255.252</STRONG>
+</PRE>
+
+<P>
+При помощи команды <A
+HREF="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=ifconfig&sektion=8  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=ifconfig&sektion=8'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=ifconfig&sektion=8">
+ifconfig(8)</A> проверяем его состояние:
+
+<PRE>
+srv1% <STRONG>ifconfig tun1</STRONG>
+tun1: flags=51&lt;UP,POINTOPOINT,RUNNING&gt; mtu 1500
+        groups: tun
+        inet 10.0.0.1 --&gt; 10.0.0.2 netmask 255.255.255.252
+</PRE>
+
+<P>
+Не забываем добавить в таблицу маршрутизации удаленную подсеть:
+
+<PRE>
+srv1# <STRONG>route add 192.168.1.0/24 10.0.0.2</STRONG>
+</PRE>
+
+<P>
+Второй сервер выступает в роли SSH-клиента, поэтому процедура конфигурирования
+здесь чуть проще:
+
+<PRE>
+srv2# <STRONG>echo 'Tunnel point-to-point' &gt;&gt; /etc/ssh/ssh_config</STRONG>
+</PRE>
+
+<P>
+Остальные настройки и действия практически идентичны описанным выше: правим и
+активируем рулесеты файервола, поднимаем tun1, присваиваем ему сетевой адрес
+(обратите внимание, порядок следования IP-адресов изменен) и добавляем
+статический маршрут:
+
+<PRE>
+srv2# <STRONG>vi /etc/pf.conf</STRONG>
+pass quick on { tun0, tun1 } inet all
+</PRE>
+
+<PRE>
+srv2# <STRONG>pfctl -f /etc/pf.conf</STRONG>
+srv2# <STRONG>ifconfig tun1 create</STRONG>
+srv2# <STRONG>ifconfig tun1 10.0.0.2 10.0.0.1 netmask 255.255.255.252</STRONG>
+srv2# <STRONG>route add 192.168.2.0/24 10.0.0.1</STRONG>
+</PRE>
+
+<P>
+И, наконец, самый ответственный момент: устанавливаем защищенное соединение
+между двумя сетями:
+
+<PRE>
+srv2# <STRONG>ssh -f -w 1:1 212.34.XX.YY true</STRONG>
+</PRE>
+
+<P>
+Чтобы снизить накладные расходы, к списку аргументов имеет смысл добавить
+ключи "<STRONG>-o Compression=yes -x -a -n</STRONG>" (сжимать передаваемые
+данные, отключить пересылку пакетов X11, запретить аутентификацию с помощью
+агента и направить <span>/dev/null</span> на стандартный
+входной поток <A
+HREF="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=stdin&sektion=4  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=stdin&sektion=4'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=stdin&sektion=4">
+stdin(4)</A>).
+Теперь проверим доступность удаленного узла, находящегося &quot;за первым
+сервером&quot;:
+
+<PRE>
+srv2% <STRONG>ping 192.168.2.101</STRONG>
+PING 192.168.2.101 (192.168.2.101): 56 data bytes
+64 bytes from 192.168.2.101: icmp_seq=0 ttl=127 time=2.508 ms
+</PRE>
+
+<P>
+Если все ОК, можно дальше развивать предложенную схему, упрощая или, наоборот,
+усложняя настройки. Например, применить беспарольную аутентификацию на базе
+ключей, создать конфигурационный файл для автоматического создания
+псевдоустройства tun1:
+
+<PRE>
+srv2# <STRONG>echo '10.0.0.2 10.0.0.1 netmask 255.255.255.252' &gt; /etc/hostname.tun1</STRONG>
+</PRE>
+
+<P>
+Занести необходимые статические маршруты и запуск "<STRONG>ssh -f -w</STRONG>"
+в один из сценариев начальной загрузки (<span>/etc/rc.local</span>)
+или в отдельный скрипт, чтобы все выполнялось одной командой, без дополнительных
+телодвижений. Чтобы использовать OpenSSH на уровне OSI 2, в качестве значения
+директив PermitTunnel и Tunnel следует использовать ethernet, а затем
+объединить в мост внешний сетевой интерфейс и псевдоустройство tunX
+(см. <A
+HREF="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=bridge&sektion=4  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=bridge&sektion=4'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=bridge&sektion=4">
+bridge(4)</A>).
+
+<P>
+Стоит отметить, с помощью OpenSSH возможно построение не только Site-to-Site
+VPN (межсайтовое подключение, в котором два маршрутизатора создают туннель в
+интернете), но и Client-to-Site (VPN-подключение удаленного доступа для
+проводных и беспроводных клиентов).
+
+<P>
+Данное пошаговое руководство основано на статье &quot;Волшебные криптотуннели&quot;,
+опубликованной в июльском номере журнала &quot;<A HREF="javascript:if(confirm('http://www.xakep.ru/  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.xakep.ru/'" tppabs="http://www.xakep.ru/">
+Хакер</A>&quot; за 2008 год. Авторы оригинальной статьи: Андрей Матвеев и
+Сергей Яремчук.
+
+</TD></TR>
+</TABLE>
+
+<P>
+<HR>
+<A HREF="javascript:if(confirm('http://www.openbsd.ru/docs/steps/index.html  \n\nThis file was not retrieved by Teleport Ultra, because it is linked too far away from its Starting Address. If you increase the in-domain depth setting for the Starting Address, this file will be queued for retrieval.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.ru/docs/steps/index.html'" tppabs="http://www.openbsd.ru/docs/steps/index.html"><IMG HEIGHT="24" WIDTH="24" SRC="back.gif" tppabs="http://www.openbsd.ru/images/back.gif"
+ ALT="OpenBSD.ru"></A>
+<A HREF="mailto:www@openbsd.ru">www@openbsd.ru</A>
+
+<BR>
+<SMALL>$RuOBSD: ssh-vpn.html,v 1.3 2010/11/01 10:57:49 dinar Exp $</SMALL>
+
+</BODY>
+</HTML>

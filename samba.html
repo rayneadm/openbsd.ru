@@ -1,0 +1,180 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=koi8-r">
+<meta http-equiv="Content-Language" content="ru">
+<meta name="copyright" content="Copyright (c) 2006 by OpenBSD.ru">
+<title>Samba: Создание файл-сервера</title>
+<link rel="stylesheet" type="text/css" href="style.css" tppabs="http://www.openbsd.ru/style.css">
+</head>
+
+<body>
+
+<h2>Samba: Создание файл-сервера</h2>
+<hr>
+
+<h3>Мини-руководство "шаг за шагом"</h3>
+
+<p>
+<table border=0>
+<tr><td>
+
+<p>
+Устанавливаем Samba из портов:
+
+<pre>
+# <strong>cd /usr/ports/net/samba</strong>
+# <strong>make install clean CLEANDEPENDS=Yes</strong>
+</pre>
+
+<p>
+Либо с помощью прекомпилированного пакета:
+
+<pre>
+# <strong>export PKG_PATH=ftp://ftp.openbsd.org/pub/OpenBSD/3.8/packages/i386/</strong>
+# <strong>pkg_add samba-3.0.13p0.tgz</strong>
+</pre>
+
+<p>
+Создаем расшаренные каталоги:
+
+<pre>
+# <strong>mkdir -p /var/samba/{public,music}</strong>
+# <strong>chmod 777 /var/samba/public</strong>
+</pre>
+
+<p>
+Редактируем <span>smb.conf</span>:
+
+<pre>
+# <strong>vi /etc/samba/smb.conf</strong>
+[global]
+   workgroup = WORKGROUP
+   netbios name = Server
+   server string = Samba Server %v
+   security = share
+   hosts allow = 192.168.2. 127.
+   load printers = no
+   guest account = nobody
+   guest ok = yes
+   log file = /var/log/smbd.%m
+   max log size = 1024
+   interfaces = fxp1 lo0
+;  bind interfaces only = yes
+   local master = no
+   os level = 1
+   domain master = no
+   preferred master = no
+   wins support = no
+   wins proxy = no
+   dns proxy = no
+   dos charset = cp866
+   unix charset = koi8-r
+
+[public]
+   path = /var/samba/public
+   comment = Share folder
+   browseable = yes
+   writable = yes
+;  create mask = 0644
+;  directory mask = 0775
+
+[music]
+   path = /var/samba/music
+   comment = Music files
+   browseable = yes
+   writeable = no
+</pre>
+
+<p>
+Проверяем конфиг на наличие ошибок:
+
+<pre>
+# <strong>testparm /etc/samba/smb.conf</strong>
+</pre>
+
+<p>
+Запускаем <tt>smbd</tt> и <tt>nmbd</tt>:
+
+<pre>
+# <strong>/usr/local/libexec/smbd -D</strong>
+# <strong>/usr/local/libexec/nmbd -D</strong>
+</pre>
+
+<p>
+Проверяем работоспособность:
+
+<pre>
+# <strong>smbclient -U% -L localhost</strong>
+Domain=[WORKGROUP] OS=[Unix] Server=[Samba 3.0.13]
+
+	Sharename       Type      Comment
+	---------       ----      -------
+	public          Disk      Share folder
+	music		Disk	  Music files
+	IPC$            IPC       IPC Service (Samba Server 3.0.13)
+	ADMIN$          IPC       IPC Service (Samba Server 3.0.13)
+</pre>
+
+<p>
+Чтобы Samba автоматически запускалась при старте системы, внесем соответствующие
+изменения в <span>/etc/rc.local</span>:
+
+<pre>
+# <strong>vi /etc/rc.local</strong>
+if [ -x /usr/local/libexec/smbd ]; then
+	echo -n ' smbd';	/usr/local/libexec/smbd -D
+fi
+
+if [ -x /usr/local/libexec/nmbd ]; then
+	echo -n ' nmbd';	/usr/local/libexec/nmbd -D
+fi
+</pre>
+
+<p>
+<br>
+При необходимости можно воспользоваться SWAT - программой веб администрирования
+Samba:
+
+<pre>
+# <strong>vi /etc/inetd.conf</strong>
+901 stream tcp nowait.400 root /usr/local/libexec/swat swat
+</pre>
+
+<p>
+И перезагрузить конфигурацию <tt>inetd</tt>:
+
+<pre>
+# <strong>kill -HUP `head -1 /var/run/inetd.pid`</strong>
+</pre>
+
+<p>
+Внимание: по умолчанию при использовании SWAT вся информация, в том числе и
+пароли, передается в открытом виде. Для обеспечения безопасности соединений
+необходимо дать указание stunnel принимать входящие SSL-соединения на 902
+порту, расшифровывать данные и передавать их на порт 901.
+
+<pre>
+# <strong>vi /etc/stunnel/stunnel.conf</strong>
+[swats]
+accept  = 902
+connect = 901
+</pre>
+
+<p>
+Подробную информацию по настройке Stunnel можно получить из мини руководства
+&quot;<a href="stunnel.html" tppabs="http://www.openbsd.ru/docs/steps/stunnel.html">Stunnel: Шифрование TCP-соединений, используя SSL
+</a>&quot;.
+
+</td></tr>
+</table>
+
+<p>
+<hr>
+<a href="javascript:if(confirm('http://www.openbsd.ru/docs/steps/index.html  \n\nThis file was not retrieved by Teleport Ultra, because it is linked too far away from its Starting Address. If you increase the in-domain depth setting for the Starting Address, this file will be queued for retrieval.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.ru/docs/steps/index.html'" tppabs="http://www.openbsd.ru/docs/steps/index.html"><img height=24 width=24 src="back.gif" tppabs="http://www.openbsd.ru/images/back.gif" alt="OpenBSD.ru"></a>
+<a href="mailto:www@openbsd.ru">www@openbsd.ru</a>
+<br>
+<small>$RuOBSD: samba.html,v 1.19 2010/11/01 10:57:49 dinar Exp $</small>
+
+</body>
+</html>

@@ -1,0 +1,348 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=koi8-r">
+<meta http-equiv="Content-Language" content="ru">
+<meta name="copyright" content="Copyright (c) 2006 by OpenBSD.ru">
+<title>Использование бездисковых рабочих станций</title>
+<link rel="stylesheet" type="text/css" href="../../style.css">
+</head>
+
+<body>
+
+<h2>Использование бездисковых рабочих станций</h2>
+<hr>
+
+<h3>Мини-руководство "шаг за шагом"</h3>
+
+<p>
+<table border=0>
+<tr><td>
+
+<p>
+В статье рассказано, как настроить бездисковую рабочую станцию для загрузки
+по сети с помощью сетевого адаптера, поддерживающего технологию Preboot
+Execution Environment (PXE). PXE широко поддерживается производителями
+сетевых карт (Intel, 3Com и т.д.), материнских плат, а также программ эмуляции,
+таких как VMWare. Файловые системы и swap размещаются на сервере и
+предоставляются клиенту через NFS.
+
+<p>
+Сначала необходимо создать файловую систему для клиента. Проще всего это
+сделать, распаковав сеты на существующую файловую систему (в данном случае
+<a href="ftp://ftp.openbsd.org/pub/OpenBSD/3.8/i386/base38.tgz">base38.tgz</a>
+и <a href="ftp://ftp.openbsd.org/pub/OpenBSD/3.8/i386/etc38.tgz">etc38.tgz</a>,
+остальные сеты распаковываются по мере надобности).
+
+<pre>
+# <strong>mkdir -p /home/diskless/root</strong>
+# <strong>tar xzpf base38.tgz -C /home/diskless/root</strong>
+# <strong>tar xzpf etc38.tgz -C /home/diskless/root</strong>
+</pre>
+
+<p>
+Также необходимо создать файл подкачки. На клиентской машине экспортированный
+swap файл монтируется к пустой директории <span>/home/diskless/root/swap</span>, которая после монтирования
+станет файлом. Суть операции в том, чтобы swap файл получил inode на файловой
+системе и
+<a href="http://www.openbsd.org/cgi-bin/man.cgi?query=swapctl&amp;sektion=8">swapctl(8)</a>
+смог его подключить. Создадим файл и директорию:
+
+<pre>
+# <strong>mkdir /home/diskless/root/swap</strong>
+# <strong>dd if=/dev/zero of=/home/diskless/swap bs=1m count=128</strong>
+# <strong>chmod 600 /home/diskless/swap</strong>
+</pre>
+
+<p>
+Создадим стандартные устройства:
+
+<pre>
+# <strong>cd /home/diskless/root/dev && ./MAKEDEV all</strong>
+</pre>
+
+<p>
+Для того чтобы собрать ядро для бездисковой станции, необходимо установить
+исходные коды из файла
+<a href="ftp://ftp.openbsd.org/pub/OpenBSD/3.8/sys.tar.gz">sys.tar.gz</a>.
+Создадим новый файл конфигурации ядра на основе ядра GENERIC:
+
+<pre>
+# <strong>cd /sys/arch/i386/conf</strong>
+# <strong>cp GENERIC DISKLESS</strong>
+</pre>
+
+<p>
+Теперь необходимо отредактировать файл <span>DISKLESS</span>
+и заменить в нем строку:
+
+<pre>
+config		bsd	swap generic
+</pre>
+
+<p>
+на
+
+<pre>
+config		bsd	root on nfs swap on nfs
+</pre>
+
+<p>
+Соберем ядро, но пока не будем его никуда инсталлировать:
+
+<pre>
+# <strong>config DISKLESS</strong>
+# <strong>cd ../compile/DISKLESS</strong>
+# <strong>make depend &amp;&amp; make</strong>
+</pre>
+
+<p>
+Далее необходимо настроить сервер так, чтобы он мог предоставить клиенту
+сетевую информацию и файловые системы. PXE содержит в себе DHCP-клиент,
+который позволяет получить сетевую информацию, а также имя файла, который
+необходимо загрузить встроенным TFTP клиентом для продолжения загрузки.
+Это копия файла <tt>/usr/mdec/pxeboot</tt>. После загрузки этого файла в память
+на него передается управление, а он в свою очередь представляет собой
+модифицированную версию загрузчика <a
+href="http://www.openbsd.org/cgi-bin/man.cgi?query=boot&amp;sektion=8&amp;arch=i386">boot(8)</a>,
+способного обрабатывать те же команды, а также поддерживающего загрузку
+ядра по TFTP. В данном случае управляющий файл <a
+href="http://www.openbsd.org/cgi-bin/man.cgi?query=boot.conf&amp;sektion=5&amp;arch=i386">boot.conf(5)</a>
+располагается на сервере.
+
+<p>
+Выполним конфигурацию DHCP и TFTP сервисов. Для настройки необходимо знать
+MAC-адрес сетевой карты клиента. Для примера будем считать, что это
+00:02:b3:5c:1e:81. IP адрес сервера 10.0.1.1, клиента: 10.0.1.2.
+Бездисковый клиент назовем <em>netboot</em>.
+
+<p>
+Настроим DHCP сервис:
+
+<pre>
+# <strong>vi /etc/dhcpd.conf</strong>
+shared-network LOCAL-NET {
+	option domain-name "example.com";
+	option domain-name-servers 10.1.1.1;
+	option routers 10.0.1.1;
+
+	subnet 10.0.1.0 netmask 255.255.255.0 {
+		range 10.0.1.32 10.0.1.127;
+	}
+}
+
+host netboot {
+	hardware ethernet 00:02:b3:5c:1e:81;
+	filename "pxeboot";
+	fixed-address 10.0.1.2;
+}
+</pre>
+
+<p>
+Запустим <tt>dhcpd</tt> на требуемом интерфейсе (для примера взят <em>xl0</em>):
+
+<pre>
+# <strong>dhcpd xl0</strong>
+</pre>
+
+<p>
+Для того, чтобы стартовать <tt>dhcpd</tt> при загрузке системы, выполните:
+
+<pre>
+# <strong>echo 'dhcpd_flags=""' &gt;&gt;/etc/rc.conf.local</strong>
+# <strong>echo 'xl0' &gt;&gt;/etc/dhcpd.interfaces</strong>
+</pre>
+
+<p>
+Настроим TFTP сервис. TFTP запускается через <tt>inetd</tt>, поэтому необходимо
+раскомментировать строку:
+
+<pre>
+tftp dgram udp wait root /usr/libexec/tftpd tftpd -s /tftpboot
+</pre>
+
+<p>
+и перезагрузить конфигурацию <tt>inetd</tt>:
+
+<pre>
+# <strong>kill -HUP `head -1 /var/run/inetd.pid`</strong>
+</pre>
+
+<p>
+Создадим директорию <span>/tftpboot</span> и скопируем в нее
+необходимые файлы (загрузочный код <tt>pxeboot</tt> и файл ядра <tt>bsd</tt>
+для бездисковой станции):
+
+<pre>
+# <strong>mkdir /tftpboot</strong>
+# <strong>cp /sys/arch/i386/compile/DISKLESS/bsd /tftpboot/</strong>
+# <strong>cp /usr/mdec/pxeboot /tftpboot/</strong>
+</pre>
+
+<p>
+Если вы не планируете производить установку OpenBSD по сети
+(<code>boot tftp:bsd.rd</code>), при каждой загрузке можно пропускать
+пятисекундную задержку и загружать ядро немедленно:
+
+<pre>
+# <strong>mkdir /tftpboot/etc</strong>
+# <strong>echo 'boot tftp:bsd' >/tftpboot/etc/boot.conf</strong>
+</pre>
+
+<p>
+Теперь разберемся с монтированием файловых систем по NFS. Для того чтобы
+получить параметры об экспортированных на сервере файловых системах,
+клиентское ядро посылает специальный BOOTPARAM запрос (перед этим система
+должна узнать определенное ей имя - это выполняется в ходе Reverse ARP запроса,
+который отрабатывается сервисом <a
+href="http://www.openbsd.org/cgi-bin/man.cgi?query=rarpd&amp;sektion=8">rarpd(8)</a>).
+На запрос BOOTPARAM отвечает сервис <a
+href="http://www.openbsd.org/cgi-bin/man.cgi?query=bootparamd&amp;sektion=8">rpc.bootparamd(8)</a>.
+
+<p>
+Перейдем к их настройке. Сервис <tt>rarpd</tt> работает с двумя файлами: <span>/etc/ethers</span>, в котором хранится соответствие MAC-адресов
+и символьных имен, а также <span>/etc/hosts</span>, с помощью
+которого по известному имени можно получить IP-адрес.
+
+<pre>
+# <strong>echo '00:02:b3:5c:1e:81 netboot' &gt;&gt;/etc/ethers</strong>
+# <strong>echo '10.0.1.2 netboot' &gt;&gt;/etc/hosts</strong>
+</pre>
+
+<p>
+Запустим <tt>rarpd</tt> и настроим автоматическую загрузку при старте системы:
+
+<pre>
+# <strong>rarpd xl0</strong>
+# <strong>echo 'rarpd_flags="xl0"' &gt;&gt;/etc/rc.conf.local</strong>
+</pre>
+
+<p>
+Сервис <tt>rpc.bootparamd</tt> настраивается через конфигурационный файл
+<span>/etc/bootparams</span>:
+
+<pre>
+# <strong>vi /etc/bootparams</strong>
+netboot root=10.0.1.1:/home/diskless/root \
+	swap=10.0.1.1:/home/diskless/swap \
+	dump=10.0.1.1:/home/diskless/swap
+</pre>
+
+<p>
+Настроим автоматический запуск <tt>rpc.bootparamd</tt> и запустим его
+(<tt>portmap</tt> должен быть также запущен, поскольку именно он реализует
+маппинг TCP или UDP портов на номера RPC программ):
+
+<pre>
+# <strong>portmap</strong>
+# <strong>rpc.bootparamd</strong>
+# <strong>echo 'bootparamd_flags=""' &gt;&gt;/etc/rc.conf.local</strong>
+</pre>
+
+<p>
+Запись <code>root=10.0.1.1:/home/diskless/root</code> отражает соответствующие
+настройки на NFS сервере. Итак, получив ответ на BOOTPARAM запрос, ядро
+связывается с NFS сервером и пытается примонтировать корневую файловую
+систему и свап. После загрузки ядра скрипт <a
+href="http://www.openbsd.org/cgi-bin/cvsweb.cgi?query=rc&amp;sektion=8">rc(8)</a>,
+основываясь на содержимом <a 
+href="http://www.openbsd.org/cgi-bin/man.cgi?query=fstab&amp;sektion=5">fstab(5)</a>,
+сделает перемонтирование корневой файловой системы в режиме записи и
+подмонтирует недостающие.
+
+<p>
+Выполним конфигурацию NFS сервера (предполагается, что NFS сервер выключен).
+Добавьте записи об экспортируемых файловых системах в <span>/etc/exports</span>:
+
+<pre>
+# <strong>vi /etc/exports</strong>
+/home/diskless/root -maproot=root -alldirs 10.0.1.2
+/home/diskless/swap -maproot=root 10.0.1.2
+</pre>
+
+<p>
+Запустим компоненты:
+
+<pre>
+# <strong>touch /var/db/mountdtab</strong>
+# <strong>mountd</strong>
+# <strong>nfsd -tun 4</strong>
+</pre>
+
+<p>
+И настроим автоматический запуск:
+
+<pre>
+# <strong>echo 'portmap=YES' &gt;&gt;/etc/rc.conf.local</strong>
+# <strong>echo 'nfs_server=YES' &gt;&gt;/etc/rc.conf.local</strong>
+</pre>
+
+<p>
+Теперь сделаем ряд настроек клиентской машины. Отредактируем <span>/etc/fstab</span>:
+
+<pre>
+# <strong>vi /home/diskless/root/etc/fstab</strong>
+10.0.1.1:/home/diskless/root /    nfs  rw                0 0
+10.0.1.1:/home/diskless/swap none swap sw,nfsmntpt=/swap 0 0
+</pre>
+
+<p>
+Также следует указать имя клиентского хоста, IP-адреса шлюза и DNS-сервера:
+
+<pre>
+# <strong>echo 'netboot' &gt;/home/diskless/root/etc/myname</strong>
+# <strong>echo '10.0.1.1' &gt;/home/diskless/root/etc/mygate</strong>
+# <strong>echo 'nameserver 10.0.1.1' &gt;/home/diskless/root/etc/resolv.conf</strong>
+</pre>
+
+<p>
+<span><b>Примечание</b>.</span> При получении бездисковой
+станции сетевых настроек с помощью DHCP, в связи с особенностями стартового
+сценария <span>/etc/netstart</span>, в <a
+href="http://www.openbsd.org/cgi-bin/man.cgi?query=hostname.if&amp;sektion=5">hostname.if(5)</a>
+необходимо указать запуск <a
+href="http://www.openbsd.org/cgi-bin/man.cgi?query=dhclient&amp;sektion=8">dhclient(8)</a>,
+а не использовать ключевое слово &quot;<code>dhcp</code>&quot;. Кроме того,
+файл <span>/home/diskless/root/etc/mygate</span> можно не
+создавать.
+
+<pre>
+# <strong>vi /home/diskless/root/etc/hostname.xl0</strong>
+!/sbin/dhclient -q \$if
+</pre>
+
+<p>
+Установим временную зону для клиентской системы. Для примера возьмем московское
+летнее время (UTC+003). Смещение в этом случае составляет -180 минут. Установим
+эти значения:
+
+<pre>
+# <strong>cd /home/diskless/root/etc</strong>
+# <strong>ln -fs /usr/share/zoneinfo/Europe/Moscow localtime</strong>
+# <strong>config -ef /tftpboot/bsd</strong>
+OpenBSD 3.8-stable (DISKLESS) #0: Tue Jan 24 11:52:24 MSK 2006
+    root@ultra.crypt.org.ru:/sys/arch/i386/compile/DISKLESS
+Enter 'help' for information
+ukc&gt; <strong>timezone</strong>
+timezone = 0, dst = 0
+ukc&gt; <strong>timezone -180</strong>
+timezone = -180, dst = 0
+ukc&gt; <strong>quit</strong>
+Saving modified kernel.
+</pre>
+
+<p>
+На этом настройка завершена. Теперь можно запустить бездисковый клиент.
+
+</td></tr>
+</table>
+
+<p>
+<hr>
+<a href="index.html"><img height=24 width=24 src="../../images/back.gif" alt="OpenBSD.ru"></a>
+<a href="mailto:www@openbsd.ru">www@openbsd.ru</a>
+<br>
+<small>$RuOBSD: diskless.html,v 1.24 2010/11/01 10:57:48 dinar Exp $</small>
+
+</body>
+</html>

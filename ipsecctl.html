@@ -1,0 +1,292 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+<HEAD>
+  <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=koi8-r">
+  <META HTTP-EQUIV="Content-Language" CONTENT="ru">
+  <META NAME="copyright" CONTENT="Copyright (c) 2000-2005, 2007 by OpenBSD.ru">
+  <TITLE>Настройка IPsec с помощью ipsecctl</TITLE>
+  <link rel="stylesheet" type="text/css" href="style.css" tppabs="http://www.openbsd.ru/style.css" />
+</HEAD>
+
+<BODY>
+
+<H2>Настройка IPsec с помощью ipsecctl</H2>
+
+<HR>
+<UL>
+  <LI><a href="#manual">Настройка хостов с использованием статических ключей</a>
+  <LI><a href="#test">Тестирование</a>
+  <LI><a href="#pf">Замечания по настройке pf</a>
+</UL>
+<HR>
+
+<A NAME="manual"></a>
+<H3>Настройка хостов с использованием статических ключей</H3>
+
+<P>
+Утилита
+<A HREF="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=ipsecctl  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=ipsecctl'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=ipsecctl">ipsecctl</A>
+заменяет более старую
+<A HREF="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=ipsecadm  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=ipsecadm'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=ipsecadm">ipsecadm</A>,
+и упрощает процедуру установки IPsec соединения, поместив всю настройку в
+удобный конфигурационный файл
+<A HREF="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=ipsec.conf  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=ipsec.conf'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=ipsec.conf">/etc/ipsec.conf</A>.
+
+<P>
+Для примера рассмотрим построение IPsec туннеля между хостами 192.168.10.1
+(hostA) и 192.168.11.1 (hostB). Будем использовать
+<span>Blowfish</span> как алгоритм
+шифрования нагрузки ESP, а для аутентификации будем использовать
+<span>HMAC-SHA2-512</span>.
+
+<P>
+Сгенерируем ключи для аутентификации (512 бит) и шифрования (160 бит).
+Для других алгоритмов необходима иная длина ключа, например, для
+<span>AES</span> длина ключа должна быть 128 бит. Примеры
+можно посмотреть в файлах regress тестов (в директории
+<span>/usr/src/regress/sbin/ipsecctl/</span>.
+
+<PRE>
+hostA# <STRONG>mkdir -m 700 /etc/ipsec</STRONG>
+hostA# <STRONG>openssl rand 64 | hexdump -e '64/1 "%02x"' >/etc/ipsec/akey.local</STRONG>
+hostA# <strong>openssl rand 20 | hexdump -e '20/1 "%02x"' >/etc/ipsec/ekey</strong>
+</PRE>
+
+<P>
+На втором узле создаем ключ для аутентификации:
+
+<PRE>
+hostB# <STRONG>mkdir -m 700 /etc/ipsec</STRONG>
+hostB# <STRONG>openssl rand 64 | hexdump -e '64/1 "%02x"' >/etc/ipsec/akey.local</STRONG>
+</PRE>
+
+<P>
+Обмениваемся auth ключами и передаем на hostB ключ для шифрования:
+
+<PRE>
+hostA# <STRONG>scp /etc/ipsec/ekey 192.168.11.1:/etc/ipsec/ekey</STRONG>
+hostA# <STRONG>scp /etc/ipsec/akey.local 192.168.11.1:/etc/ipsec/akey.remote</STRONG>
+hostB# <STRONG>scp /etc/ipsec/akey 192.168.10.1:/etc/ipsec/akey.remote</STRONG>
+</PRE>
+
+<P>
+Защищаем файлы от просмотра (на обоих узлах):
+
+<PRE>
+# <STRONG>chmod 600 /etc/ipsec.conf /etc/ipsec/{akey*,ekey}</STRONG>
+</PRE>
+
+<P>
+Создадим на узле 192.168.10.1 файл <span>/etc/ipsec.conf</span>.
+Формат файла описан в man руководстве
+<a href="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=ipsec.conf  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=ipsec.conf'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=ipsec.conf">ipsec.conf(5)</a>.
+Значения SPI (индекс параметра безопасности) выбирается случайным
+32-битным значением и уникально идентифицирует ассоциацию безопасности
+данного хоста.
+
+<PRE>
+# Конфигурация IPsec для 192.168.10.1
+#
+flow esp from 192.168.10.1 to 192.168.11.1
+esp from 192.168.10.1 to 192.168.11.1 spi 0x4d9b5ca0:0x832a16bf \
+    auth hmac-sha2-512 enc blowfish \
+    authkey file "/etc/ipsec/akey.local:/etc/ipsec/akey.remote" \
+    enckey file "/etc/ipsec/ekey:/etc/ipsec/ekey"
+</PRE>
+
+<P>
+На узле 192.168.11.1 необходимо создать ответный файл:
+
+<PRE>
+# Конфигурация IPsec для 192.168.11.1
+#
+flow esp from 192.168.11.1 to 192.168.10.1
+esp from 192.168.10.1 to 192.168.11.1 spi 0x832a16bf:0x4d9b5ca0 \
+    auth hmac-sha2-512 enc blowfish \
+    authkey file "/etc/ipsec/akey.local:/etc/ipsec/akey.remote" \
+    enckey file "/etc/ipsec/ekey:/etc/ipsec/ekey"
+</PRE>
+
+<P>
+Выполняем загрузку конфигурации на обоих хостах:
+
+<PRE>
+# <STRONG>ipsecctl -vf /etc/ipsec.conf</STRONG>
+flow esp out from 192.168.10.1 to 192.168.11.1 peer 192.168.11.1
+        type require
+flow esp in from 192.168.11.1 to 192.168.10.1 peer 192.168.11.1
+        type use
+esp from 192.168.10.1 to 192.168.11.1 spi 0x4d9b5ca0 \
+    auth hmac-sha2-512 enc blowfish
+        authkey <...>
+        enckey <...>
+esp from 192.168.11.1 to 192.168.10.1 spi 0x832a16bf \
+    auth hmac-sha2-512 enc blowfish
+        authkey <...>
+        enckey <...>
+</PRE>
+
+<P>
+Если правила применились успешно, и вы хорошо оттестировали конфигурацию,
+необходимо разрешить конфигурирование IPsec при запуске системы. Для этого
+добавьте в файл
+<span>/etc/rc.conf.local</span> следующую строчку:
+
+<PRE>
+ipsec=YES
+</PRE>
+
+<A NAME="test"></A>
+<H3>Тестирование</H3>
+
+<P>
+Проверяем. На хосте 192.168.10.1:
+
+<PRE>
+hostA# <STRONG>ipsecctl -sa</STRONG>
+FLOWS:
+flow esp in from from 192.168.10.1 to 192.168.11.1 \
+    peer 192.168.11.1
+flow esp out from from 192.168.11.1 to 192.168.10.1 \
+    peer 192.168.11.1
+
+SADB:
+esp from 192.168.10.1 to 192.168.11.1 spi 0x4d9b5ca0 \
+    enc blowfish auth hmac-sha2-512
+esp from 192.168.11.1 to 192.168.10.1 spi 0x832a16bf \
+    enc blowfish auth hmac-sha2-512
+</PRE>
+
+<P>
+Видно, что на втором хосте (192.168.11.1) часть, отвечающая за базу SA,
+та же самая, а описания IPsec потоков противоположные.
+
+<PRE>
+hostB# <STRONG>ipsecctl -sa</STRONG>
+FLOWS:
+flow esp in from from 192.168.11.1 to 192.168.10.1 \
+    peer 192.168.10.1
+flow esp out from from 192.168.10.1 to 192.168.11.1 \
+    peer 192.168.10.1
+
+SADB:
+esp from 192.168.10.1 to 192.168.11.1 spi 0x4d9b5ca0 \
+    enc blowfish auth hmac-sha2-512
+esp from 192.168.11.1 to 192.168.10.1 spi 0x832a16bf \
+    enc blowfish auth hmac-sha2-512
+</PRE>
+
+<P>
+Проверим, что творится в канале. Запускаем дампер сетевого трафика на
+192.168.11.1:
+
+<PRE>
+hostB# <STRONG>tcpdump -nvi fxp0 host 192.168.10.1 and 192.168.11.1</STRONG>
+</PRE>
+
+<P>
+Пытаемся присоединиться к порту 22 с машины 192.168.10.1:
+
+<PRE>
+hostA# <STRONG>telnet 192.168.11.1 ssh</STRONG>
+Trying 192.168.11.1...
+Connected to 192.168.11.1.
+Escape character is '^]'.
+SSH-1.99-OpenSSH_4.1
+</PRE>
+
+<P>
+На 192.168.11.1 видим только пакеты ESP:
+
+<PRE>
+18:51:59.624908 esp 192.168.10.1 &gt; 192.168.11.1 spi 0x4D9B5CA0 \
+    seq 559 len 68 [tos 0x10] (ttl 64, id 44596, len 88)
+18:51:59.625505 esp 192.168.11.1 &gt; 192.168.10.1 spi 0x832A16BF \
+    seq 436 len 68 (DF) (ttl 64, id 29087, len 88)
+...
+</PRE>
+
+<P>
+Стоит также обратить внимание на появившиеся маршруты в таблице маршрутизации:
+
+<PRE>
+hostA# <STRONG>netstat -rnf encap</STRONG>
+Routing tables
+
+Encap:
+Source          Port Destination     Port Proto SA(Address/Proto/Type/Direction)
+192.168.11.1/32 0    192.168.10.1/32 0    0     192.168.11.1/50/use/in
+192.168.10.1/32 0    192.168.11.1/32 0    0     192.168.11.1/50/require/out
+</pre>
+
+<A NAME="pf"></A>
+<H3>Замечания по настройке pf</H3>
+
+<P>
+Перейдем к настройке фильтра пакетов (pf). Основные идееи тут должны быть
+такими:
+
+<UL>
+  <LI>
+  Необходимо разрешить входящий трафик по протоколу ESP от необходимых узлов.
+
+  <LI>
+  Запретить не ESP трафик от этих узлов (если, конечно, не требуется
+  обратное...)
+
+  <LI>
+  Фильтрация по расшифрованной нагрузке (протоколы/порты) должна
+  производиться на интерфейсе
+  <a href="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=enc&sektion=4  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=enc&sektion=4'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=enc&sektion=4">enc0</a>.
+</UL>
+
+<P>
+Примерный вид правил для узла (hostA) может выглядеть так:
+
+<PRE>
+# Определение внешнего интерфейса
+#
+<STRONG>ext_if = "fxp0"</STRONG>
+
+# Удаленный IPsec хост
+#
+<STRONG>hostB  = "192.168.11.1"</STRONG>
+
+# Не фильтровать на loopback
+#
+<STRONG>set skip on lo</STRONG>
+
+# Политика блокирования по умолчанию
+#
+<STRONG>block</STRONG>
+<STRONG>block return-rst proto tcp</STRONG>
+
+# Разрешить исходящие пакеты (к hostB будет явно разрешен только ESP)
+#
+<STRONG>pass out to ! $hostB keep state</STRONG>
+
+# Разрешить входящие и исходящие соединения от/к hostB только по протоколу ESP
+#
+<STRONG>pass in on $ext_if proto esp from $hostB to ($ext_if) keep state</STRONG>
+<STRONG>pass out on $ext_if proto esp from ($ext_if) to $hostB keep state</STRONG>
+
+# Разрешить входящие соединения от hostB на необходимые порты
+#
+<STRONG>pass in on enc0 proto tcp from $hostB to ($ext_if) port { 80 8080 } \
+    keep state</STRONG>
+</PRE>
+
+<P>
+Дополнительную информацию можно найти на страничке man руководства
+<A HREF="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=vpn&sektion=8  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=vpn&sektion=8'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=vpn&sektion=8">vpn(8)</A>. Использование IKE сервиса для обмена ключами описано в
+<A HREF="ipsec.html#isakmpd" tppabs="http://www.openbsd.ru/docs/faq/ipsec.html#isakmpd">Как настроить
+ISAKMPD (IKE)</A>.
+
+<HR>
+<A HREF="index-1.htm" tppabs="http://www.openbsd.ru/docs/"><IMG HEIGHT=24 WIDTH=24 SRC="back.gif" tppabs="http://www.openbsd.ru/images/back.gif" ALT="OpenBSD.ru"></A>
+<A HREF="mailto:www@openbsd.ru">www@openbsd.ru</A>
+<BR>
+<SMALL>$RuOBSD: ipsecctl.html,v 1.9 2010/11/01 10:57:48 dinar Exp $</SMALL>
+
+</BODY>
+</HTML>

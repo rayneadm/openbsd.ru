@@ -1,0 +1,432 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+<HEAD>
+  <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=koi8-r">
+  <META HTTP-EQUIV="Content-Language" CONTENT="ru">
+  <META NAME="copyright" content="Copyright (c) 2004-2005 by OpenBSD.ru">
+  <link rel="stylesheet" type="text/css" href="../style.css" />
+  <TITLE>Настройка sendmail</TITLE>
+</HEAD>
+
+<BODY>
+
+<H2>Настройка sendmail</H2>
+<HR>
+
+<UL>
+  <LI><A HREF="#tls">Настройка TLS и SSL</A>
+  <LI><A HREF="#auth">Настройка SMTP авторизации</A>
+  <LI><A HREF="#client">Настройка sendmail как SMTP клиента с авторизацией</A>
+  <LI><A HREF="#hosts">Как заставить sendmail использовать /etc/hosts</A>
+  <LI><A HREF="#maildir">Хранение писем в Maildir</A>
+  <LI><A HREF="#procmail">Использование procmail в качестве LDA</A>
+</UL>
+<HR>
+
+<A NAME="tls"></A>
+<H3>Настройка TLS и SSL</H3>
+
+<P>
+Начиная с версии 8.11, sendmail поддерживает защиту ESMTP соединения с
+помощью расширения STARTTLS (<span>RFC 2487</span>).
+Для настройки TLS прежде всего нужно создать SSL сертификат и секретный
+DSA-ключ для шифрования:
+
+<PRE>
+# <STRONG>mkdir -m 700 /etc/mail/certs</STRONG>
+# <STRONG>openssl dsaparam 1024 -out dsa1024.pem</STRONG>
+# <STRONG>openssl req -x509 -nodes -days 365 -newkey dsa:dsa1024.pem \
+	-out /etc/mail/certs/mycert.pem -keyout /etc/mail/certs/mykey.pem</STRONG>
+# <STRONG>rm -f dsa1024.pem</STRONG>
+</PRE>
+
+<P>
+Если у вас уже есть ключ шифрования, то для создания сертификата следует
+подать команду:
+
+<PRE>
+# <STRONG>openssl req -x509 -new -days 365 -key /etc/mail/certs/mykey.pem \
+	-out /etc/mail/certs/mycert.pem</STRONG>
+</PRE>
+
+<P>
+Параметр <span>-days</span> позволяет указать количество дней,
+в течение которых сертификат будет действительным. Чтобы проверить созданный
+сертификат, можно воспользоваться следующей командой:
+
+<PRE>
+# <STRONG>openssl x509 -in /etc/mail/certs/mycert.pem -text</STRONG>
+</PRE>
+
+<P>
+Если вы не планируете использовать TLS для авторизации (не путать с
+<A HREF="#auth">SMTP авторизацией</A>) или используете сертификат, подписанный
+самим собой, следует создать symlink:
+
+<PRE>
+# <STRONG>ln -s /etc/mail/certs/mycert.pem /etc/mail/certs/CAcert.pem</STRONG>
+</PRE>
+
+<P>
+В противном случае следует поместить сертификат авторизации в файл
+<span>/etc/mail/certs/CAcert.pem</span>. Не забудьте
+установить права, запрещающие чтение/запись файлов сертификатов и ключей
+простым пользователям:
+
+<PRE>
+# <STRONG>chmod 600 /etc/mail/certs/*</STRONG>
+</PRE>
+
+<P>
+Теперь следует настроить sendmail. В .mc файле конфигурации нужно добавить
+следующие строки:
+
+<PRE>
+define(`CERT_DIR',        `MAIL_SETTINGS_DIR`'certs')dnl
+define(`confCACERT_PATH', `CERT_DIR')dnl
+define(`confCACERT',      `CERT_DIR/CAcert.pem')dnl
+define(`confSERVER_CERT', `CERT_DIR/mycert.pem')dnl
+define(`confSERVER_KEY',  `CERT_DIR/mykey.pem')dnl
+define(`confCLIENT_CERT', `CERT_DIR/mycert.pem')dnl
+define(`confCLIENT_KEY',  `CERT_DIR/mykey.pem')dnl
+</PRE>
+
+<P>
+После добавления вышеуказанных строк в файл конфигурации следует пересобрать
+его с помощью m4 (см. файл
+<span>/usr/share/sendmail/README</span>) и рестартовать
+уже запущенный sendmail:
+
+<PRE>
+# <STRONG>kill -HUP `head -1 /var/run/sendmail.pid`</STRONG>
+</PRE>
+
+<P>
+Для проверки настроек TLS можно воспользоваться командой telnet:
+
+<PRE>
+# <STRONG>telnet localhost smtp</STRONG>
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is '^]'.
+220 form.home.lan ESMTP Sendmail 8.13.1/8.13.1; Wed, 17 Nov 2004 13:42:08 +0600
+(NOVT)
+EHLO localhost
+250-form.home.lan Hello root@localhost.home.lan [127.0.0.1], pleased to meet you
+250-ENHANCEDSTATUSCODES
+250-PIPELINING
+250-8BITMIME
+250-SIZE
+250-DSN
+250-ETRN
+250-AUTH PLAIN
+250-STARTTLS
+250-DELIVERBY
+250 HELP
+</PRE>
+
+<P>
+При правильной настройке в ответе сервера на команду &quot;EHLO&quot; должна
+присутствовать строка &quot;250-STARTTLS&quot;. Смотрите также по данной теме
+<A HREF="http://www.openbsd.org/cgi-bin/man.cgi?query=starttls&amp;sektion=8">
+starttls(8)</A>,
+<A HREF="http://www.openbsd.org/cgi-bin/man.cgi?query=ssl&amp;sektion=8">
+ssl(8)</A>,
+<A HREF="http://www.sendmail.org/~ca/email/starttls.html">
+http://www.sendmail.org/~ca/email/starttls.html</A>,
+<span>/usr/share/sendmail/README</span>.
+
+<P>
+Для того чтобы научить sendmail работать по SSL (без использования
+STARTTLS), нужно создать и добавить в .mc файл сертификат и ключ для
+шифрования, как описано выше, а также добавить следующие строки:
+<PRE>
+DAEMON_OPTIONS(`Name=MTA')dnl
+DAEMON_OPTIONS(`Port=465, Name=MTA-SSL, M=s')dnl
+</PRE>
+
+Не забудьте перезапустить sendmail:
+<PRE>
+# <STRONG>kill -HUP `head -1 /var/run/sendmail.pid`</STRONG>
+</PRE>
+
+Для проверки можно воспользоваться командой openssl:
+<PRE>
+# <STRONG>openssl s_client -connect localhost:465</STRONG>
+CONNECTED(00000004)
+
+<EM>[...]</EM>
+
+---
+SSL handshake has read 1409 bytes and written 288 bytes
+---
+New, TLSv1/SSLv3, Cipher is DHE-DSS-AES256-SHA
+Server public key is 1024 bit
+SSL-Session:
+    Protocol  : TLSv1
+    Cipher    : DHE-DSS-AES256-SHA
+    Session-ID:
+28CAD859854BC30F61B0013DF835E69CDB0037D82FD741F9C7A56DD1E25B655
+    Session-ID-ctx:
+    Master-Key:
+F5BA53F5C0659E3E12D1057FE8D4AEA8177A868169B35949793ABECED7870A29FF4B3AFB9D479EA86618185D5192B837
+    Key-Arg   : None
+    Start Time: 1119252698
+    Timeout   : 300 (sec)
+    Verify return code: 18 (self signed certificate)
+---
+220 cvs.openbsd.ru ESMTP Sendmail 8.12.11/8.12.11; Mon, 20 Jun 2005 11:37:06 +0400 (MSD)
+</PRE>
+
+<A NAME="auth"></A>
+<H3>Настройка SMTP авторизации</H3>
+
+<P>
+Для настройки авторизации следует пересобрать sendmail с поддержкой SASL.
+Для этого следует установить пакет <span>cyrus-sasl2</span>
+или порт <span>security/cyrus-sasl2</span>. Для включения
+поддержки SASL нам потребуется перекомпилировать sendmail следующим образом:
+
+<PRE>
+# <STRONG>echo WANT_SMTPAUTH=yes &gt;&gt; /etc/mk.conf</strong>
+# <STRONG>cd /usr/src/gnu/usr.sbin/sendmail</strong>
+# <STRONG>make cleandir</STRONG>
+# <STRONG>make obj</STRONG>
+# <STRONG>make depend</STRONG>
+# <STRONG>make</STRONG>
+# <STRONG>make install</STRONG>
+</PRE>
+
+Также можно воспользоваться набором
+<A HREF="../files/site.tar.gz">site.tar.gz</A> и пересобрать sendmail,
+установив настройку SENDMAIL_SASL=Yes в mk.conf.
+
+<P>
+Далее следует создать файл конфигурации SASL для sendmail
+(<span>/usr/local/lib/sasl2/Sendmail.conf</span>):
+
+<PRE>
+pwcheck_method: saslauthd
+</PRE>
+
+<P>
+Добавляем в <span>/etc/rc.local</span> строки для запуска
+saslauthd:
+
+<PRE>
+if [ -x /usr/local/sbin/saslauthd ]; then
+	echo -n ' saslauthd';	/usr/local/sbin/saslauthd -a getpwent
+fi
+</PRE>
+
+<P>
+Теперь остается только включить поддержку авторизации в .mc файле конфигурации
+sendmail:
+
+<PRE>
+dnl
+dnl Эту опцию следует включить, чтобы запретить авторизацию с помощью
+dnl механизмов PLAIN и LOGIN по незащищенному соединению
+dnl (без использования TLS).
+dnl
+define(`confAUTH_OPTIONS', `p')dnl
+dnl
+dnl Список допустимых механизмов авторизации. Для всех механизмов,
+dnl кроме PLAIN и LOGIN, невозможна авторизация по системному файлу
+dnl паролей. Для них следует использовать sasldb или другие способы
+dnl авторизации (см. документацию sasl2).
+dnl
+define(`confAUTH_MECHANISMS', `DIGEST-MD5 CRAM-MD5 PLAIN LOGIN')dnl
+dnl
+dnl Список механизмов, авторизация по которым разрешает использовать
+dnl сервер для пересылки почты (relaying).
+dnl
+TRUST_AUTH_MECH(`DIGEST-MD5 CRAM-MD5 PLAIN LOGIN')dnl
+</PRE>
+
+<P>
+Не забудьте перезапустить sendmail:
+
+<PRE>
+# <STRONG>kill -HUP `head -1 /var/run/sendmail.pid`</STRONG>
+</PRE>
+
+<P>
+Для проверки настройки авторизации можно воспользоваться командой telnet:
+
+<PRE>
+# <STRONG>telnet localhost smtp</STRONG>
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is '^]'.
+220 form.home.lan ESMTP Sendmail 8.13.1/8.13.1; Wed, 17 Nov 2004 13:42:08 +0600
+(NOVT)
+EHLO localhost
+250-form.home.lan Hello root@localhost.home.lan [127.0.0.1], pleased to meet you
+250-ENHANCEDSTATUSCODES
+250-PIPELINING
+250-8BITMIME
+250-SIZE
+250-DSN
+250-ETRN
+250-AUTH DIGEST-MD5 CRAM-MD5
+250-STARTTLS
+250-DELIVERBY
+250 HELP
+</PRE>
+
+<P>
+При правильной настройке в ответе сервера на команду &quot;EHLO&quot;
+должна присутствовать строка &quot;250-AUTH&quot;. В случае если в
+файле конфигурации запрещено использование PLAIN авторизации по
+незащищенному соединению, вместо команды telnet следует использовать
+команду openssl:
+
+<PRE>
+# <STRONG>openssl s_client -starttls smtp -connect localhost:smtp</STRONG>
+</PRE>
+
+<P>
+Смотрите также <span>/usr/share/sendmail/README</span>,
+<A HREF="#tls">Настройка TLS и SSL</A>.
+
+<A NAME="client"></A>
+<H3>Настройка sendmail как SMTP клиента с авторизацией</H3>
+
+<P>
+В случае, когда sendmail выступает в роли клиента, демон saslauthd
+не требуется. В файл конфигурации необходимо внести следующие изменения:
+
+<PRE>
+define(`SMART_HOST', `smtp: smtp.domain.ru')dnl
+define(`confAUTH_MECHANISMS', `DIGEST-MD5 CRAM-MD5 PLAIN LOGIN')dnl
+FEATURE(`authinfo', `hash /etc/mail/authinfo')dnl
+</PRE>
+
+<P>
+Указываем SMTP-сервер, имя и пароль пользователя, а также метод аутентификации
+в отдельном файле <span>/etc/mail/authinfo</span>:
+
+<PRE>
+AuthInfo:smtp.domain.ru "U:username@domain.ru" "P:mypassword" "M:CRAM-MD5"
+</PRE>
+
+<P>
+Создаем хэшированную базу данных
+<span>/etc/mail/authinfo.db</span>:
+
+<PRE>
+# <STRONG>makemap hash /etc/mail/authinfo &lt; /etc/mail/authinfo</STRONG>
+</PRE>
+
+<A NAME="hosts"></A>
+<H3>Как заставить sendmail использовать /etc/hosts</H3>
+
+<P>
+По умолчанию sendmail использует в первую очередь DNS. Чтобы заставить его
+сначала смотреть <span">/etc/hosts</span>, нужно создать
+файл <span>/etc/mail/service.switch</span> и прописать в
+нем следующую строку:
+
+<PRE>
+hosts	files dns
+</PRE>
+
+<P>
+После этого достаточно перезапустить sendmail:
+
+<PRE>
+# <STRONG>kill -HUP `head -1 /var/run/sendmail.pid`</STRONG>
+</PRE>
+
+<A NAME="maildir"></A>
+<H3>Хранение писем в Maildir</H3>
+
+<P>
+По умолчанию sendmail использует <span>mail.local</span>
+в качестве локального агента доставки почты. При этом почта доставляется в
+формате стандартного BSD mailbox. Чтобы доставлять почту в Maildir,
+нам потребуется установить альтернативный агент доставки
+<span>mail.buhal</span>, который можно скачать
+<A HREF="http://pdp-11.org.ru/~form/openbsd/">отсюда</A>.
+
+<P>
+Сначала нужно собрать и установить mail.buhal:
+
+<PRE>
+# <STRONG>make depend && make && make install</STRONG>
+</PRE>
+
+<P>
+Далее следует указать <span>mail.buhal</span> в файле
+конфигурации sendmail в качестве локального агента доставки:
+
+<PRE>
+define(`LOCAL_MAILER_PATH', `/usr/libexec/mail.buhal')dnl
+MODIFY_MAILER_FLAGS(`LOCAL', `-m')dnl
+</PRE>
+
+<P>
+Теперь достаточно перекомпилировать файл конфигурации и перезапустить sendmail.
+
+<P>
+В портах OpenBSD, в категории <span>mail</span>, есть
+программы <span>procmail</span> и
+<span>maildrop</span>, которые также поддерживают
+формат Maildir и дополнительные расширения данного формата. 
+
+<A NAME="procmail"></A>
+<H3>Использование procmail в качестве LDA</H3>
+
+<P>
+После установки procmail из портов или пакетов, необходимо создать глобальный
+конфигурационный файл. Пример конфигурации:
+
+<PRE>
+# Секция общих настроек.
+#
+DROPPRIVS=yes
+COMSAT=no
+VERBOSE=off
+SHELL=/bin/sh
+PATH=/bin:/usr/bin:/usr/local/bin
+LOCKFILE=$HOME/.lockmail
+LOGFILE=$HOME/procmail.log
+
+# Складываем почту в формате Maildir.
+#
+MAILDIR=$HOME/Maildir/
+DEFAULT=$MAILDIR
+
+# Входящую корреспонденцию можно резервировать в файлы формата mbox.
+#
+#:0 c
+#/var/mail/$LOGNAME
+
+# Либо передавать в хранилище на другом хосте.
+#
+#:0 c
+#! mail@mx2.domain.ru
+</PRE>
+
+<P>
+Далее необходимо изменить локальный агент доставки (LDA) с mail.local на
+procmail:
+
+<PRE>
+FEATURE(local_procmail)dnl
+MAILER(local)dnl
+MAILER(smtp)dnl
+</PRE>
+
+<P>
+Теперь достаточно перекомпилировать файл конфигурации и перезапустить sendmail.
+
+<HR>
+<A HREF="../index.html"><IMG HEIGHT="24" WIDTH="24" SRC="../images/back.gif"
+ ALT="OpenBSD.ru"></A>
+<A HREF="mailto:www@openbsd.ru">www@openbsd.ru</A><BR>
+<SMALL>$RuOBSD: howto-sendmail.html,v 1.10 2010/11/01 10:57:47 dinar Exp $</SMALL>
+
+</BODY>
+</HTML>

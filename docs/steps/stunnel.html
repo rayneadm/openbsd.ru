@@ -1,0 +1,141 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=koi8-r">
+<meta http-equiv="Content-Language" content="ru">
+<meta name="copyright" content="Copyright (c) 2005 by OpenBSD.ru">
+<title>Stunnel: Шифрование TCP-соединений, используя SSL</title>
+<link rel="stylesheet" type="text/css" href="../../style.css">
+</head>
+
+<body>
+
+<h2>Stunnel: Шифрование TCP-соединений, используя SSL</h2>
+<hr>
+
+<h3>Мини-руководство "шаг за шагом"</h3>
+
+<p>
+<table border=0>
+<tr><td>
+
+<p>
+Устанавливаем <tt>stunnel</tt> из портов:
+
+<pre>
+# <strong>cd /usr/ports/security/stunnel</strong>
+# <strong>make install</strong>
+</pre>
+
+<p>
+Создаем приватный RSA-ключ и самоподписанный сертификат:
+
+<pre>
+# <strong>/usr/sbin/openssl req -new -x509 -days 365 -nodes \
+	-config w-stunnel-4.13/stunnel-4.13/tools/stunnel.cnf \
+	-out /etc/ssl/private/stunnel.pem \
+	-keyout /etc/ssl/private/stunnel.pem</strong>
+
+Country Name (2 letter code) [PL]:<b>RU</b>
+State or Province Name (full name) [Some-State]:<b>Russia</b>
+Locality Name (eg, city) []:<b>Moscow</b>
+Organization Name (eg, company) [Stunnel Developers Ltd]:<b>MyORG</b>
+Organizational Unit Name (eg, section) []:<b>IT</b>
+Common Name (FQDN of your server) [localhost]:<b>srv.domain.ru</b>
+</pre>
+
+<p>
+Для работы алгоритма согласования ключей Диффи-Хеллмана генерируем специальные
+параметры:
+
+<pre>
+# <strong>/usr/sbin/openssl gendh 512 >> /etc/ssl/private/stunnel.pem</strong>
+</pre>
+
+<p>
+Выставляем корректные права доступа:
+
+<pre>
+# <strong>chmod 600 /etc/ssl/private/stunnel.pem</strong>
+</pre>
+
+<p>
+Вот так можно получить информацию о созданном сертификате:
+
+<pre>
+# <strong>/usr/sbin/openssl x509 -subject -dates -fingerprint \
+	-noout -in /etc/ssl/private/stunnel.pem</strong>
+</pre>
+
+<p>
+Удаляем рабочий подкаталог и временный файл:
+
+<pre>
+# <strong>make clean; rm -f stunnel.rnd</strong>
+</pre>
+
+<p>
+Редактируем конфигурационный файл <tt>stunnel</tt>:
+
+<pre>
+# <strong>vi /etc/stunnel/stunnel.conf</strong>
+
+# Секция общих настроек.
+#
+cert = /etc/ssl/private/stunnel.pem
+chroot = /var/stunnel/
+setuid = _stunnel
+setgid = _stunnel
+pid = /var/run/stunnel.pid
+socket = l:TCP_NODELAY=1
+socket = r:TCP_NODELAY=1
+
+# Обеспечиваем безопасность почтовых протоколов.
+#
+[pop3s]
+accept  = 995
+connect = 110
+
+[imaps]
+accept  = 993
+connect = 143
+</pre>
+
+<p>
+Запускаем <tt>stunnel</tt>:
+
+<pre>
+# <strong>/usr/local/sbin/stunnel</strong>
+</pre>
+
+<p>
+Проверяем, готов ли <tt>stunnel</tt> принимать входящие подключения:
+
+<pre>
+# <strong>netstat -na -f inet | egrep '993|995'</strong>
+tcp	0	0	*.993	*.*	LISTEN
+tcp	0	0	*.995	*.*	LISTEN
+</pre>
+
+<p>
+В <span>/etc/rc.local</span> прописываем автозапуск <tt>stunnel</tt>:
+
+<pre>
+# <strong>vi /etc/rc.local</strong>
+if [ -x /usr/local/sbin/stunnel ]; then
+	echo -n ' stunnel';	/usr/local/sbin/stunnel
+fi
+</pre>
+
+</td></tr>
+</table>
+
+<p>
+<hr>
+<a href="index.html"><img height=24 width=24 src="../../images/back.gif" alt="OpenBSD.ru"></a>
+<a href="mailto:www@openbsd.ru">www@openbsd.ru</a>
+<br>
+<small>$RuOBSD: stunnel.html,v 1.12 2010/11/01 10:57:49 dinar Exp $</small>
+
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=koi8-r">
+<meta http-equiv="Content-Language" content="ru">
+<meta name="copyright" content="Copyright (c) 2005,2009 by OpenBSD.ru">
+<title>Apache: Проведение безопасных транзакций по протоколу HTTPS</title>
+<link rel="stylesheet" type="text/css" href="style.css" tppabs="http://www.openbsd.ru/style.css">
+</head>
+
+<body>
+
+<h2>Apache: Проведение безопасных транзакций по протоколу HTTPS</h2>
+<hr>
+
+<h3>Мини-руководство "шаг за шагом"</h3>
+
+<p>
+<table border=0>
+<tr><td>
+
+<p>
+Генерируем приватный RSA-ключ длиной 1024 бит:
+
+<pre>
+# <strong>openssl genrsa -out /etc/ssl/private/server.key 1024</strong>
+</pre>
+
+<p>
+Создаем запрос на сертификат:
+
+<pre>
+# <strong>openssl req -new -key /etc/ssl/private/server.key -out /etc/ssl/private/server.csr</strong>
+Country Name (2 letter code) []:<b>RU</b>
+State or Province Name (full name) []:<b>Russia</b>
+Locality Name (eg, city) []:<b>Moscow</b>
+Organization Name (eg, company) []:<b>MyORG</b>
+Organizational Unit Name (eg, section) []:<b>IT</b>
+Common Name (eg, fully qualified host name) []:<b>srv.domain.ru</b>
+Email Address []:<b>admin@domain.ru</b>
+A challenge password []:
+An optional company name []:
+</pre>
+
+<p>
+Подписываем сертификат своим ключом:
+
+<pre>
+# <strong>openssl x509 -req -days 365 -in /etc/ssl/private/server.csr \
+	-signkey /etc/ssl/private/server.key -out /etc/ssl/server.crt</strong>
+</pre>
+
+<p>
+Выставляем корректные права доступа к файлам, созданным в директории
+<span>/etc/ssl/private</span>:
+
+<pre>
+# <strong>chmod 600 /etc/ssl/private/server.{csr,key}</strong>
+</pre>
+
+<p>
+Выполняем останов и повторный запуск
+<a href="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=httpd&sektion=8  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=httpd&sektion=8'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=httpd&sektion=8">
+httpd(8)</a>, но уже с поддержкой <span>https</span>:
+
+<pre>
+# <strong>apachectl stop</strong>
+# <strong>apachectl startssl</strong>
+</pre>
+
+<p>
+Проверяем, готов ли <tt>httpd</tt> принимать входящие подключения:
+
+<pre>
+% <strong>netstat -na -f inet | egrep '80|443'</strong>
+tcp	0	0	*.80	*.*	LISTEN
+tcp	0	0	*.443	*.*	LISTEN
+</pre>
+
+<p>
+Можно выполнить еще одну проверку, на этот раз с помощью
+<a href="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=openssl&sektion=1  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=openssl&sektion=1'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=openssl&sektion=1">
+openssl(1)</a>:
+
+<pre>
+% <strong>openssl s_client -connect localhost:443 -state -debug</strong>
+</pre>
+
+<p>
+Запрашиваем индексную страницу по протоколу <span>https</span>:
+
+<pre>
+% <strong>lynx https://localhost/</strong>
+</pre>
+
+<p>
+Если все в порядке, в <span>/etc/rc.conf.local</span>
+прописываем автозапуск Apache с поддержкой SSL:
+
+<pre>
+# <strong>vi /etc/rc.conf.local</strong>
+httpd_flags="-DSSL"
+</pre>
+
+</td></tr>
+</table>
+
+<p>
+<hr>
+<a href="javascript:if(confirm('http://www.openbsd.ru/docs/steps/index.html  \n\nThis file was not retrieved by Teleport Ultra, because it is linked too far away from its Starting Address. If you increase the in-domain depth setting for the Starting Address, this file will be queued for retrieval.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.ru/docs/steps/index.html'" tppabs="http://www.openbsd.ru/docs/steps/index.html"><img height=24 width=24 src="back.gif" tppabs="http://www.openbsd.ru/images/back.gif" alt="OpenBSD.ru"></a>
+<a href="mailto:www@openbsd.ru">www@openbsd.ru</a>
+<br>
+<small>$RuOBSD: https.html,v 1.9 2010/11/01 10:57:48 dinar Exp $</small>
+
+</body>
+</html>

@@ -1,0 +1,263 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+<HEAD>
+  <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=koi8-r">
+  <META HTTP-EQUIV="Content-Language" CONTENT="ru">
+  <META NAME="copyright" CONTENT="Copyright (c) 2006,2007 by OpenBSD.ru">
+  <TITLE>Описание переменных sysctl</TITLE>
+  <link rel="stylesheet" type="text/css" href="style.css" tppabs="http://www.openbsd.ru/style.css" />
+</HEAD>
+
+<BODY>
+
+<H2>Описание переменных sysctl</H2>
+<HR>
+
+<UL>
+  <LI><A HREF="#sysctl">Работа с sysctl(8)</A>
+  <LI><A HREF="#res">Лимиты на системные ресурсы</A>
+  <LI><A HREF="#network">Параметры стека TCP/IP и другие сетевые настройки</A>
+  <LI><A HREF="#sysv">Лимиты средств межпроцессного взаимодействия в стиле
+   UNIX System V</A>
+</UL>
+<HR>
+
+<P>
+Значения некоторых параметров ядра, влияющих на работу его подсистем, можно
+изменять из контекста суперпользователя во время работы системы.
+Механизмом, реализующим доступ к переменным ядра в OpenBSD, является
+<A HREF="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=sysctl&sektion=3  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=sysctl&sektion=3'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=sysctl&sektion=3">sysctl(3)</A>.
+Команда непосредственного управления -
+<A HREF="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=sysctl&sektion=8  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=sysctl&sektion=8'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=sysctl&sektion=8">sysctl(8)</A>.
+Она способна как распечатывать текущие значения параметров, так и выставлять их.
+
+<A NAME="sysctl"></A>
+<H3>Работа с sysctl(8)</H3>
+
+<P>
+<UL>
+  <LI>Вывод на экран всех доступных переменных с их текущими значениями:
+  <P>
+  <CODE># sysctl -a</CODE>
+
+  <LI>Чтобы узнать значение конкретной переменной:
+  <P>
+  <CODE># sysctl переменная</CODE>
+
+  <LI>Для изменения значения переменной:
+  <P>
+  <CODE># sysctl переменная=значение</CODE>
+</UL>
+
+<P>
+Типы значений переменных sysctl могут быть числовыми и строковыми.
+Изменять значения требуемых переменных следует в файле
+<span>/etc/sysctl.conf</span>, чтение которого происходит при
+загрузке системы.
+
+<A NAME="res"></A>
+<H3>Лимиты на системные ресурсы</H3>
+
+<UL TYPE="disc">
+  <LI><U><CODE>kern.maxfiles</CODE></U>
+  <P>
+  Переменная <CODE>kern.maxfiles</CODE> определяет максимальное число
+  дескрипторов файлов. Каждый открытый файл, сокет или буфер использует
+  дескриптор файла. Нагруженному серверу может понадобиться много тысяч
+  дескрипторов файлов, в зависимости от количества программ, одновременно
+  выполняемых на сервере. Количество дескрипторов, используемых в данный
+  момент, содержится в переменной <CODE>kern.nfiles</CODE>.
+
+
+  <LI><U><CODE>kern.maxvnodes</CODE></U>
+  <P>
+  Максимальное число vnode, аллоцируемых для дисковых операций. Следует
+  увеличить если <CODE>kern.numvnodes</CODE> превышает значение
+  <CODE>kern.maxvnodes</CODE> в два раза. Поскольку система использует
+  механизм повторного использования vnode, изменять это значение следует
+  только в том случае, когда система испытывает нехватку ресурса (случается
+  паника ядра и т.п.)
+
+  <LI><U><CODE>kern.maxproc</CODE></U>
+  <P>
+  Максимально допустимое число одновременно запущенных процессов. Текущее
+  количество запущенных процессов можно узнать через <CODE>kern.nprocs</CODE>.
+  </UL>
+
+<A NAME="network"></A>
+<H3>Параметры стека TCP/IP и другие сетевые
+ настройки</H3>
+
+<UL TYPE="disc">
+  <LI><U><CODE>kern.maxclusters</CODE></U>
+  <P>
+  Ограничивает количество 
+  <a href="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=mbuf&sektion=9  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=mbuf&sektion=9'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=mbuf&sektion=9">mbuf(9)</a>
+  (структуры и функции mbuf обеспечивают управление буферами памяти,
+  используемыми сетевой подсистемой ядра), доступных системе. Каждый кластер
+  представлен 2 Kb памяти. Посмотреть количество сетевых кластеров можно с
+  помощью команды:
+
+  <P>
+  <CODE># netstat -m</CODE>
+  <P>
+  Если пиковое значение близко к максимальному, его стоит увеличить. 
+
+  <LI><U><CODE>net.inet.ip.ifq.maxlen</CODE></U>
+  <P>
+  Параметр задает значение максимальной длины очереди из пакетов, принятых
+  из устройства. Имеет смысл увеличить значение до 500-1000.
+
+  <LI><U><CODE>net.inet.ip.forwarding</CODE></U>
+  <P>
+  Если необходимо выполнять перенаправление IPv4-пакетов между сетевыми
+  интерфейсами, установите значение, равным 1. Применяйте только в том случае,
+  когда система должна выступать в качестве маршрутизатора.
+
+  <LI><U><CODE>net.inet.ip.maxqueue</CODE></U>
+  <P>
+  Устанавливает размер очереди, используемой для хранения фрагментированных
+  IP пакетов. Количество отброшенных фрагментов отражается параметром
+  &quot;fragment floods&quot; в выводе команды <CODE>netstat -s -p ip</CODE>.
+
+  <!--LI><U><CODE>net.inet.ip.redirect</CODE></U>
+  <P>
+  Атакующий может использовать IP redirect для изменения таблицы маршрутизации
+  на удаленном хосте. Значение 0 позволит игнорировать подобные пакеты.
+
+  <LI><U><CODE>net.inet.ip.sourceroute</CODE></U>
+  <P>
+  С помощью маршрутизации отправителя атакующий может попытаться достигнуть
+  внутренние IP-адреса, включая адреса RFC1918. Важно не включать принятие
+  пакетов маршрутизации отправителя для предотвращения незаметных проб вашей
+  внутренней сети.
+
+  <LI><U><CODE>net.inet.icmp.bmcastecho</CODE></U>
+  <P>
+  Эти атаки работают с помощью отправки ECHO-запроса на широковещательный адрес
+  с фальшивого адреса. По умолчанию некоторые стеки TCP/IP отвечают на такие
+  сообщения. Нет необходимости включать эту опцию.
+
+  <LI><U><CODE>net.inet.icmp.maskrepl</CODE></U>
+  <P>
+  Существуют 2 вида проб. Запрос маски адреса может быть использован для
+  определения размера блока сети и установки диапазона для дальнейших проб.
+  Широковещательный запрос временного штампа (timestamp) - это одно из средств
+  выявления хостов и определения операционных систем (fingerprinting).
+
+  <LI><U><CODE>net.inet.icmp.errppslimit</CODE></U>
+  <LI><U><CODE>net.inet.tcp.rstppslimit</CODE></U>
+  <P>
+  Задает максимальное количество исходящих ICMP-error и TCP RST пакетов.
+  Данные переменные могут помочь снизить урон от сетевых атак, когда
+  генерируется большое количество ответных пакетов.-->
+
+  <LI><U><CODE>net.inet.tcp.sendspace</CODE></U>
+  <LI><U><CODE>net.inet.udp.sendspace</CODE></U>
+  <LI><U><CODE>net.inet.tcp.recvspace</CODE></U>
+  <LI><U><CODE>net.inet.udp.recvspace</CODE></U>
+  <P>
+  На размер буфера приема и передачи TCP напрямую влияет параметр размера
+  окна TCP. Увеличенный размер окна позволит более эффективно передавать
+  данные, особенно при интенсивной передаче, такой как FTP и HTTP. Для
+  нагруженных серверов значение по умолчанию не является оптимальным и может
+  быть увеличено до 32768 байт. Если вам необходим буфер больше, чем 65535
+  байт, перед внесением изменений обратитесь к RFC1323 и RFC2018.<BR>
+  <EM><STRONG>Внимание!</STRONG> Изменение этого параметра может привести
+  к изменению результатов анализа OS fingerprint'а такими утилитами как
+  pf(4), tcpdump(8), p0f и т.д.</EM>
+
+  <LI><U><CODE>net.inet.tcp.baddynamic</CODE></U>
+  <P>
+  Список зарезервированных TCP портов. Порты с этими номерами не будут
+  использованы ядром в качестве портов для исходящих соединений. Это может
+  быть полезно, если используются непривилегированные процессы, прослушивающие
+  определенные порты с номерами выше 1024. Для того, чтобы добавить номер порта
+  в список, необходимо выполнить команду:
+  <P>
+  <CODE># sysctl net.inet.tcp.baddynamic=+52000</CODE>
+  <P>
+  А чтобы удалить:
+  <P>
+  <CODE># sysctl net.inet.tcp.baddynamic=-52000</CODE>
+</UL>
+
+<A NAME="sysv"></A>
+<H3>Лимиты средств межпроцессного взаимодействия в
+ стиле UNIX System V</H3>
+
+<P>
+Посмотреть информацию о используемых средствах System V IPC можно с
+помощью программы
+<A HREF="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=ipcs&sektion=1  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=ipcs&sektion=1'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=ipcs&sektion=1">ipcs(1)</A>.
+
+<UL TYPE="disc">
+  <LI><U><CODE>kern.shminfo</CODE></U>
+  <P>
+  Иерархия переменных, относящихся к разделяемой памяти.
+
+  <UL>
+    <LI><U><CODE>kern.shminfo.shmmax</CODE></U>
+    <P>
+    Наибольший допустимый размер сегмента разделяемой памяти (в байтах).
+
+    <LI><U><CODE>kern.shminfo.shmmni</CODE></U>
+    <P>
+    Максимальное количество сегментов разделяемой памяти для системы.
+
+    <LI><U><CODE>kern.shminfo.shmseg</CODE></U>
+    <P>
+    Максимальное количество сегментов разделяемой памяти на процесс.
+
+    <LI><U><CODE>kern.shminfo.shmall</CODE></U>
+    <P>
+    Общее количество разделяемой памяти, которое может быть использовано
+    (в страницах оперативной памяти).
+  </UL>
+
+  <P>
+  Настройки разделяемой памяти стоит изменять только в случае работы с
+  прокси сервером Squid, который использует по одной области разделяемой
+  памяти для каждой <CODE>cachedir</CODE>. Значение
+  <CODE>kern.shminfo.shmmni</CODE> должно быть равно или больше значения
+  <CODE>cachedir</CODE>, <CODE>kern.shminfo.shmmax</CODE> больше либо равно
+  размеру <CODE>cachedir</CODE> и <CODE>kern.shminfo.shmall</CODE> должно
+  быть не меньше <CODE>kern.shminfo.shmmni</CODE>, умноженной на
+  <CODE>kern.shminfo.shmmax</CODE>.
+
+  <LI><U><CODE>kern.seminfo</CODE></U>
+  <P>
+  Иерархия переменных, относящихся к семафорам.
+
+  <UL>
+    <LI><U><CODE>kern.seminfo.semmni</CODE></U>
+    <P>
+    Число идентификаторов семафоров в системе. Определяет максимальное число
+    семафоров.
+
+    <LI><U><CODE>kern.seminfo.semmns</CODE></U>
+    <P>
+    Число семафоров в системе. Каждый серверный процесс требует один семафор.
+
+    <LI><U><CODE>kern.seminfo.semmnu</CODE></U>
+    <P>
+    Число undo-структур, которые используются для восстановления структур
+    данных семафоров при фатальном завершении процесса. Выставляется в
+    максимальное число одновременных процессов в статусе runnable в системе.
+
+    <LI><U><CODE>kern.seminfo.semmsl</CODE></U>
+    <P>
+    Максимальное число семафоров, разрешенное системой в пределах одного
+    набора семафоров.
+  </UL>
+</UL>
+
+<HR>
+<A HREF="index-1.html" tppabs="http://www.openbsd.ru/docs/index.html"><IMG HEIGHT="24" WIDTH="24" SRC="back.gif" tppabs="http://www.openbsd.ru/images/back.gif"
+ ALT="OpenBSD.ru"></A>
+<A HREF="mailto:www@openbsd.ru">www@openbsd.ru</A>
+<BR>
+<SMALL>$RuOBSD: howto-sysctl.html,v 1.25 2010/11/01 10:57:47 dinar Exp $</SMALL>
+
+</BODY>
+</HTML>

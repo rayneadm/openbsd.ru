@@ -1,0 +1,190 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=koi8-r">
+<meta http-equiv="Content-Language" content="ru">
+<meta name="copyright" content="Copyright (c) 2005-2006 by OpenBSD.ru">
+<title>Squid: Прозрачное проксирование Web-трафика</title>
+<link rel="stylesheet" type="text/css" href="../../style.css">
+</head>
+
+<body>
+
+<h2>Squid: Прозрачное проксирование Web-трафика</h2>
+<hr>
+
+<h3>Мини-руководство "шаг за шагом"</h3>
+
+<p>
+<table border=0>
+<tr><td>
+
+<p>
+Устанавливаем <tt>squid</tt> из портов:
+
+<pre>
+# <strong>cd /usr/ports/www/squid</strong>
+# <strong>env FLAVOR=transparent make install clean</strong>
+</pre>
+
+<p>
+Или с помощью прекомпилированного пакета:
+
+<pre>
+# <strong>pkg_add ftp://ftp.openbsd.org/pub/OpenBSD/3.8/packages/i386/squid-2.5.STABLE12-transparent.tgz</strong>
+</pre>
+
+<p>
+Выставляем корректные права доступа для псевдоустройства
+<a href="http://www.openbsd.org/cgi-bin/man.cgi?query=pf&amp;sektion=4">pf(4)</a>:
+
+<pre>
+# <strong>chgrp _squid /dev/pf</strong>
+# <strong>chmod g+rw /dev/pf</strong>
+</pre>
+
+<p>
+<span><b>Примечание</b></span>. Начиная с OpenBSD 3.9, стало
+возможным использовать более ограниченные права доступа для
+<span>/dev/pf</span>:
+
+<pre>
+# <strong>chgrp _squid /dev/pf</strong>
+# <strong>chmod g+r /dev/pf</strong>
+</pre>
+
+<p>
+Редактируем главный конфигурационный файл прокси-сервера:
+
+<pre>
+# <strong>vi /etc/squid/squid.conf</strong>
+http_port 127.0.0.1:3128
+# Для Squid 2.6 формат директивы http_port изменен:
+# http_port 127.0.0.1:3128 transparent
+icp_port 0
+cache_mem 128 MB
+cache_dir ufs /var/squid/cache 8192 16 256
+cache_store_log none
+pid_filename /var/run/squid.pid
+acl our_networks src 192.168.1.0/24
+http_access allow our_networks
+cache_mgr admin@domain.ru
+visible_hostname srv.domain.ru
+httpd_accel_host virtual
+httpd_accel_port 80
+httpd_accel_with_proxy on
+httpd_accel_uses_host_header on
+# Для Squid 2.6 директивы httpd_accel_* следует удалить.
+</pre>
+
+<p>
+Проверяем конфиг на наличие ошибок:
+
+<pre>
+# <strong>/usr/local/sbin/squid -k parse</strong>
+</pre>
+
+<p>
+Создаем кэш:
+
+<pre>
+# <strong>/usr/local/sbin/squid -z</strong>
+</pre>
+
+<p>
+Загружаем <tt>squid</tt> (в некоторых случаях может оказаться полезным ключ
+'-D' - не выполнять DNS-тест):
+
+<pre>
+# <strong>/usr/local/sbin/squid</strong>
+</pre>
+
+<p>
+Проверяем, готов ли сервер принимать подключения по 3128/tcp:
+
+<pre>
+# <strong>netstat -na -f inet | grep 3128</strong>
+tcp	0	0	127.0.0.1.3128	*.*	LISTEN
+</pre>
+
+<p>
+Заворачиваем на прокси входящие клиентские www-запросы:
+
+<pre>
+# <strong>vi /etc/pf.conf</strong>
+
+# С помощью макросов указываем сетевые интерфейсы
+#
+ext_if = "fxp0"
+int_if = "fxp1"
+
+# Таблицы радикса, в которые заносим IP-адреса клиентов, а также www-серверов,
+# содержимое которых кэшировать не следует
+#
+table &lt;clients&gt; persist file &quot;/etc/clients.conf&quot;
+table &lt;no_cache&gt; { 192.168.1.0/24, 192.168.2.0/24 }
+
+# Выполняем трансляцию сетевых адресов
+#
+nat on $ext_if inet from &lt;clients&gt; to any -&gt; $ext_if
+
+# Перенаправляем на прокси-сервер все www-запросы, поступающие на внутренний
+# сетевой интерфейс 
+#
+rdr on $int_if inet proto tcp from &lt;clients&gt; to ! &lt;no_cache&gt; \
+	port www -&gt; 127.0.0.1 port 3128
+
+# В том случае, если в сети работают IPsec-клиенты, перенаправляем на
+# прокси-сервер все www-запросы, поступающие на псевдоинтерфейс enc0
+#
+rdr on enc0 inet proto tcp from &lt;clients&gt; to ! &lt;no_cache&gt; \
+	port www -&gt; 127.0.0.1 port 3128
+</pre>
+
+<p>
+Указываем IP-адреса клиентских машин, которым нужно предоставить выход в Сеть:
+
+<pre>
+# <strong>vi /etc/clients.conf</strong>
+192.168.1.2/32
+192.168.1.3/32
+192.168.1.9/32
+</pre>
+
+<p>
+Перезагружаем набор рулесетов файервола:
+
+<pre>
+# <strong>pfctl -f /etc/pf.conf</strong>
+</pre>
+
+<p>
+В начале каждого месяца выполняем ротацию журнальных записей:
+
+<pre>
+# <strong>crontab -e</strong>
+0	8	1	*	*	/usr/local/sbin/squid -k rotate
+</pre>
+
+<p>
+В <span>/etc/rc.local</span> прописываем автозапуск <tt>squid</tt>:
+
+<pre>
+# <strong>vi /etc/rc.local</strong>
+if [ -x /usr/local/sbin/squid ]; then
+	echo -n ' squid';	/usr/local/sbin/squid
+fi 
+</pre>
+
+</td></tr>
+</table>
+
+<p>
+<hr>
+<a href="index.html"><img height=24 width=24 src="../../images/back.gif" alt="OpenBSD.ru"></a>
+<a href="mailto:www@openbsd.ru">www@openbsd.ru</a>
+<br>
+<small>$RuOBSD: squid.html,v 1.26 2010/11/01 10:57:49 dinar Exp $</small>
+
+</body>
+</html>

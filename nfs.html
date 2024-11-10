@@ -1,0 +1,142 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=koi8-r">
+<meta http-equiv="Content-Language" content="ru">
+<meta name="copyright" content="Copyright (c) 2005-2006 by OpenBSD.ru">
+<title>OpenBSD: Использование сетевой файловой системы NFS</title>
+<link rel="stylesheet" type="text/css" href="style.css" tppabs="http://www.openbsd.ru/style.css">
+</head>
+
+<body>
+
+<h2>OpenBSD: Использование сетевой файловой системы NFS</h2>
+<hr>
+
+<h3>Мини-руководство "шаг за шагом"</h3>
+
+<p>
+<table border=0>
+<tr><td>
+
+<p>
+В файле 
+<a href="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=exports&sektion=5  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=exports&sektion=5'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=exports&sektion=5">exports(5)</a>
+перечисляем каталоги, которые должны быть предоставлены для общего доступа
+через NFS, а также задаем права доступа к ним:
+
+<pre>
+# <strong>vi /etc/exports</strong>
+/export -alldirs -ro -network=192.168.2.0 -mask=255.255.255.0
+/usr/src /usr/ports -maproot=root 192.168.2.3
+</pre>
+
+<p>
+Последовательно загружаем
+<a href="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=portmap&sektion=8  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=portmap&sektion=8'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=portmap&sektion=8">portmap(8)</a>,
+<a href="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=nfsd&sektion=8  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=nfsd&sektion=8'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=nfsd&sektion=8">nfsd(8)</a>,
+<a href="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=mountd&sektion=8  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=mountd&sektion=8'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=mountd&sektion=8">mountd(8)</a>:
+<pre>
+# <strong>portmap</strong>
+# <strong>nfsd -tun 4</strong>
+# <strong>touch /var/db/mountdtab</strong>
+# <strong>mountd</strong>
+</pre>
+
+<p>
+Для того чтобы <tt>mountd</tt> смог перечитать
+<span>/etc/exports</span>, следует отправить ему сигнал
+<span>SIGHUP</span>:
+
+<pre>
+# <strong>kill -HUP `head -1 /var/run/mountd.pid`</strong>
+</pre>
+
+<p>
+Проверить корректность работы RPC-служб можно с помощью следующей команды:
+
+<pre>
+% <strong>rpcinfo -p 192.168.2.1</strong>
+   program vers proto   port
+    100000    2   tcp    111  portmapper
+    100000    2   udp    111  portmapper
+    100003    2   udp   2049  nfs
+    100003    3   udp   2049  nfs
+    100003    2   tcp   2049  nfs
+    100003    3   tcp   2049  nfs
+    100005    1   udp    772  mountd
+    100005    3   udp    772  mountd
+    100005    1   tcp    804  mountd
+    100005    3   tcp    804  mountd
+</pre>
+
+<p>
+Вот таким образом можно получить список экспортируемых общих ресурсов:
+
+<pre>
+% <strong>showmount -e</strong>
+Exports list on localhost:
+/export                            192.168.2.0
+/usr/src                           192.168.2.3
+/usr/ports                         192.168.2.3
+</pre>
+
+<p>
+В <a href="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=rc.conf&sektion=8  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=rc.conf&sektion=8'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=rc.conf&sektion=8">
+rc.conf(8)</a> прописываем автозапуск служб NFS:
+
+<pre>
+# <strong>vi /etc/rc.conf</strong>
+nfs_server=YES
+portmap=YES
+nfsd_flags="-tun 4"
+</pre>
+
+<p>
+Конфигурирование клиента NFS заключается в выполнении следующих шагов. В первую
+очередь изменяем значение переменной
+<a href="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=sysctl&sektion=8  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=sysctl&sektion=8'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=sysctl&sektion=8">sysctl(8)</a>:
+
+<pre>
+# <strong>sysctl -w vfs.nfs.iothreads=4</strong>
+</pre>
+
+<p>
+Добавляем соответствующую запись в
+<a href="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=sysctl.conf&sektion=5  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=sysctl.conf&sektion=5'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=sysctl.conf&sektion=5">sysctl.conf(5)</a>:
+
+<pre>
+# <strong>vi /etc/sysctl.conf</strong>
+vfs.nfs.iothreads=4
+</pre>
+
+<p>
+Задаем опции монтирования общих ресурсов NFS в
+<a href="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=fstab&sektion=5  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=fstab&sektion=5'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=fstab&sektion=5">fstab(5)</a>:
+
+<pre>
+# <strong>vi /etc/fstab</strong>
+192.168.2.1:/export /mnt nfs ro,nodev,nosuid,tcp,soft,intr 0 0
+192.168.2.1:/usr/src /usr/src nfs rw,noauto,nodev,nosuid,soft,intr 0 0
+192.168.2.1:/usr/ports /usr/ports nfs rw,noauto,nodev,nosuid,soft,intr 0 0
+</pre>
+
+<p>
+Пример монтирования удаленной файловой системы:
+
+<pre>
+# <strong>mount /usr/ports</strong>
+</pre>
+
+</td></tr>
+</table>
+
+<p>
+<hr>
+<a href="javascript:if(confirm('http://www.openbsd.ru/docs/steps/index.html  \n\nThis file was not retrieved by Teleport Ultra, because it is linked too far away from its Starting Address. If you increase the in-domain depth setting for the Starting Address, this file will be queued for retrieval.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.ru/docs/steps/index.html'" tppabs="http://www.openbsd.ru/docs/steps/index.html"><img height=24 width=24 src="back.gif" tppabs="http://www.openbsd.ru/images/back.gif" alt="OpenBSD.ru"></a>
+<a href="mailto:www@openbsd.ru">www@openbsd.ru</a>
+<br>
+<small>$RuOBSD: nfs.html,v 1.9 2010/11/01 10:57:48 dinar Exp $</small>
+
+</body>
+</html>

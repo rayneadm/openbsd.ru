@@ -1,0 +1,516 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+<HEAD>
+  <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=koi8-r">
+  <META HTTP-EQUIV="Content-Language" CONTENT="ru">
+  <META NAME="copyright" CONTENT="Copyright (c) 2000-2004 by OpenBSD.ru">
+  <TITLE>Использование файла mk.conf</TITLE>
+  <link rel="stylesheet" type="text/css" href="style.css" tppabs="http://www.openbsd.ru/style.css" />
+</HEAD>
+<BODY>
+
+<H2>Использование файла mk.conf</H2>
+<HR>
+
+<H3>Зачем это нужно?</H3>
+
+<P>&nbsp; &nbsp; &nbsp; &nbsp;
+Многие администраторы OpenBSD предпочитают собирать систему самостоятельно,
+из исходных текстов, а также собирать и устанавливать packages из дерева
+портов. При этом часто используется файл <CODE>/etc/mk.conf</CODE>,
+позволяющий указать, какие именно возможности требуются от системы.
+Наиболее часто этот файл используется, чтобы отключить Kerberos и тому
+подобные возможности, которые нужны довольно редко. Но это далеко не
+единственная область, где возможно применение файла <CODE>mk.conf</CODE>.
+
+<P>&nbsp; &nbsp; &nbsp; &nbsp;
+Часто нам хочется включить в систему некоторые возможности, которые не
+включены в системных компонентах, но поддерживаются этими компонентами
+(например SMTP Authentication в sendmail). Однако ставить для этого
+данные компоненты &quot;вручную&quot; из исходных кодов неудобно:
+
+<ol>
+<li>То, что идёт с системой, лучше проверено именно с OpenBSD.
+<li>После каждой пересборки системы нужно следить, чтобы установленное
+    &quot;вручную&quot; ПО продолжало работать в новой системе.
+</ol>
+
+<P>&nbsp; &nbsp; &nbsp; &nbsp;
+Очень часто мы бываем недовольны некоторыми особенностями программ,
+устанавливаемых из портов, или просто хотим немного подправить
+устанавливаемую программу под свои конкретные цели... Словом, иногда
+возникает ситуация, когда есть потребность сделать что-то, ради чего не стоит
+беспокоить народ из ports@openbsd.org. :)
+
+<P>
+И здесь нам снова поможет <CODE>mk.conf</CODE>.
+<H3><FONT COLOR="#0000e0">Примеры использования mk.conf.</FONT></H3>
+
+<P>&nbsp; &nbsp; &nbsp; &nbsp;
+Рассмотрим некоторые варианты использования <CODE>mk.conf</CODE> на примере
+набора для облегчения жизни <A HREF="javascript:if(confirm('http://www.openbsd.ru/files/site.tar.gz  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a path excluded by the site\'s Robot Exclusion parameters.  (Teleport Ultra\'s compliance with this system is optional; see the Project Properties, Netiquette page.)  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.ru/files/site.tar.gz'" tppabs="http://www.openbsd.ru/files/site.tar.gz">site.tar.gz</A>.
+Данный набор состоит собственно из файла <CODE>mk.conf</CODE> и набора
+патчей, используемых им в своих целях. Данный набор можно установить в
+свою систему и дополнять по мере надобности. Для установки достаточно
+скачать файл <A HREF="javascript:if(confirm('http://www.openbsd.ru/files/site.tar.gz  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a path excluded by the site\'s Robot Exclusion parameters.  (Teleport Ultra\'s compliance with this system is optional; see the Project Properties, Netiquette page.)  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.ru/files/site.tar.gz'" tppabs="http://www.openbsd.ru/files/site.tar.gz">site.tar.gz</A> и выполнить
+следующие команды:
+
+<PRE>
+	# cd /etc
+	# tar xfz <путь-до-файла>/site.tar.gz
+	# ln -sf site/mk.conf .
+</PRE>
+
+<P>
+После установки данного набора остается только отредактировать файл mk.conf
+и настроить его под свои нужды (рассматриваемые в данной статье настройки
+могут отличаться от настроек в текущей версии
+<A HREF="javascript:if(confirm('http://www.openbsd.ru/files/site.tar.gz  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a path excluded by the site\'s Robot Exclusion parameters.  (Teleport Ultra\'s compliance with this system is optional; see the Project Properties, Netiquette page.)  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.ru/files/site.tar.gz'" tppabs="http://www.openbsd.ru/files/site.tar.gz">site.tar.gz</A>):
+
+<P>
+<PRE>
+# Настройки собираемой системы.
+#
+SKEY?=			Yes		# Включать поддержку S/Key
+KERBEROS5?=		Yes		# Включать поддержку Kerberos V
+YP?=			Yes		# Включать поддержку NIS
+TCP_WRAPPERS?=		Yes		# Включать поддержку libwrap и tcpd
+AFS?=			Yes		# Включать поддержку AFS
+</PRE>
+<EM>
+Данные настройки определяют, какие стандартные компоненты должны быть
+включены в собираемую из исходных текстов систему.
+</EM>
+
+<PRE>
+NOPROFILE?=		No		# Не собирать profiled библиотеки
+</PRE>
+<EM>
+Данные настройки определяют, нужно ли собирать profiled библиотеки.
+</EM>
+
+<PRE>
+CRUNCH?=		No		# Собирать crunchgen и crunchide
+</PRE>
+<EM>
+Данная настройка определяет, нужно ли собирать crunchgen и crunchide,
+необходимые для сборки дистрибутива OpenBSD.
+</EM>
+
+<PRE>
+# Настройки suexec для хостинга
+#
+PATCH_SUEXEC?=		Yes		# Научить suexec понимать login.conf
+SUEXEC_DOCROOT?=	/home/www	# Корневой каталог серверов
+SETUID_SUEXEC?=		Yes		# Устанавливать как setuid
+</PRE>
+<EM>
+Данные настройки определяют, требуется ли поддержка login классов в
+suexec, корневой каталог для документов с точки зрения suexec и следует
+ли его устанавливать как setuid программу (необходимо, если планируется
+использование suexec).
+</EM>
+
+<PRE>
+SENDMAIL_SASL?=		No		# Включить поддержку SASL2
+#SENDMAIL_LIBMILTER?=	No		# Включить поддержку libmilter
+#INSTALL_LIBMILTER?=	No		# Устанавливать libmilter
+</PRE>
+<EM>
+Данные настройки определяют, следует ли собирать sendmail с поддержкой SASL2
+для использования возможности авторизации SMTP (в системе должен
+быть установлен порт secuity/cyrus-sasl2, а
+также следует ли включить поддержку Milter API и устанавливать
+библиотеку libmilter (обычно требуется для почтовых антивирусных программ
+и некоторых спам-фильтров). Начиная с OpenBSD 3.6, последние две настройки
+не нужны, так как libmilter всегда собирается и устанавливается.
+</EM>
+
+<PRE>
+# Разрешение авторизации в ppp по PostgreSQL базе
+#
+# Авторизация по PostgreSQL включается в ppp.conf командой
+# set postgres ["conninfo"].
+#
+# В базе должна присутствовать таблица как минимум со следующими полями:
+#
+# CREATE TABLE ppp (
+#	authname	VARCHAR(32)	NOT NULL UNIQUE,
+#	authkey		TEXT,
+#	hisaddr		TEXT,
+#	label		TEXT,
+#	enabled		BOOLEAN		NOT NULL DEFAULT TRUE
+# );
+#
+# Типы TEXT/VARCHAR взаимозаменяемы.
+#
+PPP_PGSQL?=		No		# Разрешить авторизацию по PostgreSQL
+</PRE>
+<EM>
+Данная настройка определяет, следует ли включать в ppp поддержку авторизации
+по PostgreSQL базе данных.
+</EM>
+
+<PRE>
+# Разное
+#
+PATCH_MOUNT?=		Yes		# Патчить mount с целью слегка
+#					# укоротить кое-какие надписи
+PATCH_MODLOAD?=		Yes		# Заставляет работать modload так,
+#					# как он и должен работать :)
+PATCH_LOCALE?=		Yes		# Подпатчить libc на предмет LC_CTYPE,
+#					# дабы подружить ru XKB и X программы
+</PRE>
+<EM>
+Данные настройки определяют, следует ли патчить mount (на предмет укорачивания
+некоторых сообщений), modload (на предмет спасения системы от краха, если был
+загружен кернел не из /bsd) и libc (на предмет locale, чтобы подружить XKB
+и старые X программы).
+</EM>
+
+<PRE>
+# Качать distfiles для портов сначала отсюда
+#
+MASTER_SITE_OVERRIDE?=	ftp://pdp-11.org.ru/pub/OpenBSD/distfiles/${DIST_SUBDIR}/
+</PRE>
+<EM>
+Данная настройка позволяет указать сервера, которые должны просматриваться
+в первую очередь в поисках distfiles для портов.
+</EM>
+
+<PRE>
+PIPE?=			-pipe		# Использовать pipes вместо /tmp при
+#					# компиляции
+</PRE>
+<EM>
+Данная настройка заставляет gcc использовать unix pipes вместо временных
+файлов в /tmp.
+</EM>
+
+<PRE>
+SUDO?=			/usr/bin/sudo	# sudo (для make build)
+</PRE>
+<EM>
+Устанавливает переменную SUDO, которая используется при сборке от лица
+простого пользователя, входящего в группу wsrc.
+</EM>
+
+<PRE>
+SITEDIR?=		/etc/site	# Где все это лежит
+BSDSRCDIR?=		/usr/src	# Где находится src
+BSDOBJDIR?=		/usr/obj	# Где находится obj
+PORTSDIR?=		/usr/ports	# Где находится ports
+</PRE>
+<EM>
+Данный настройки указывают расположение исходных текстов системы, дерева
+портов и других каталогов, используемых при сборке.
+</EM>
+
+<PRE>
+# Научка GQmpeg конвертировать windows-1251 заголовки в koi8-r
+#
+.if ${.CURDIR} == ${PORTSDIR}/audio/gqmpeg
+CONFIGURE_ARGS+=	--enable-russian
+.endif
+</PRE>
+<EM>
+Данный фрагмент включает автоматическую перекодировку заголовков MP3
+файлов windows-1251 в koi8-r в программе GQMpeg, собираемой из порта
+audio/gqmpeg.
+</EM>
+
+<PRE>
+# Установка IRC сервера по умолчанию для BitchX и IrcII на irc.pdp-11.org.ru
+#
+.if ${.CURDIR} == ${PORTSDIR}/net/ircII || ${.CURDIR} == ${PORTSDIR}/net/bitchx
+CONFIGURE_ARGS+=	--with-default-server=irc.pdp-11.org.ru
+.endif
+</PRE>
+<EM>
+Данный фрагмент устанавливает IRC сервер по умолчанию для ircII и BitchX,
+собираемых из портов net/ircII и net/bitchx соответственно.
+</EM>
+
+<PRE>
+# Научка ipfm запускать несколько копий и создавать pidfile в виде
+# /var/run/ipfm-&lt;interface&gt;.pid
+#
+.if ${.CURDIR} == ${PORTSDIR}/net/ipfm
+post-patch:
+	@${PATCH} ${PATCH_ARGS} < ${SITEDIR}/patches/ipfm.patch
+.endif
+</PRE>
+<EM>
+Данный фрагмент исправляет порт net/ipfm, добавляя в него поддержку
+одновременной работы с несколькими сетевыми интерфейсами. При этом
+PID файл будет создаваться в виде /var/run/ipfm-&lt;интерфейс&gt;.pid
+</EM>
+
+<PRE>
+# Отучка courier-imap писать IPv4->IPv6 mapped адреса в логе (и от IPv6 :)
+#
+.if ${.CURDIR} == ${PORTSDIR}/mail/courier-imap
+CONFIGURE_ARGS+=	--without-ipv6
+.endif
+</PRE>
+<EM>
+Данный фрагмент убирает из логов все, что похоже на IPv6 для порта
+mail/courier-imap.
+</EM>
+
+<PRE>
+# Улучшение SPAM-protect feature в hypermail
+#
+.if ${.CURDIR} == ${PORTSDIR}/mail/hypermail
+post-patch:
+	@${ECHO_MSG} "===>  Applying SPAM-protect patch"
+	@cd ${WRKSRC} && ${PATCH} -sp0 < ${SITEDIR}/patches/hypermail.patch
+.endif
+</PRE>
+<EM>
+Данный фрагмент улучшает spamprotect feature для порта mail.hypermail.
+При этом вместо почтовых адресов в HTML документах будут фигурировать
+только имена пользователей без указания почтовых доменов.
+</EM>
+
+<PRE>
+# Грязный хак для sylpheed, чтобы subject не поганил
+# (не нужен, если выше включена опция PATCH_LOCALE).
+#
+#.if ${.CURDIR} == ${PORTSDIR}/mail/sylpheed
+#post-patch:
+#	@${ECHO_MSG} "===>  Applying ugly charset hack"
+#	@cd ${WRKSRC} && ${PATCH} -sp0 < \
+#		${SITEDIR}/patches/sylpheed-charset.patch
+#.endif
+</PRE>
+<EM>
+Данный фрагмент с помощью грубой физической силы заставляет порт
+mail/sylpheed писать поле Subject по-русски. Криво, но на безлокальи
+сойдет. :) Данный хак не нужен, если используется настройка PATCH_LOCALE.
+</EM>
+
+<PRE>
+# Включение поддержки SSL в postgresql. Начиная с OpenBSD 3.6, поддержка
+# уже включена в порте.
+#
+#.if ${.CURDIR} == ${PORTSDIR}/databases/postgresql
+#CONFIGURE_ARGS+=	--with-openssl=/usr
+#.endif
+</PRE>
+Данный фрагмент свключает поддержку SSL для порта databases/postgresql.
+Начиная с OpenBSD 3.6, поддержка SSL включена в порте сразу.
+<EM>
+</EM>
+
+<PRE>
+# Запись IP адреса PPTP клиента в env PPTP_CLIENT для poptop.
+#
+.if ${.CURDIR} == ${PORTSDIR}/net/poptop
+post-patch:
+	@${ECHO_MSG} "===>  Applying PPTP_CLIENT env patch"
+	@cd ${WRKSRC} && ${PATCH} -sp0 < ${SITEDIR}/patches/poptop.patch
+.endif
+</PRE>
+<EM>
+Данный фрагмент заставляет порт net/poptop записывать адрес клиента
+в переменную PPTP_CLIENT. Данную переменную можно затем использовать в скриптах
+/etc/ppp/ppp.linkup и /etc/ppp/ppp.linkdown.
+</EM>
+
+<PRE>
+.if ${.CURDIR} == ${BSDSRCDIR}/usr.sbin/httpd && defined(PATCH_SUEXEC) \
+    && ${PATCH_SUEXEC:U} == YES && ${.CURDIR} != ${.OBJDIR}
+prereq:	${.OBJDIR}/config.status
+	@echo "Patching suexec..."
+	@sh ${SITEDIR}/patches/suexec.sh ${SUEXEC_DOCROOT}
+.endif
+
+.if ${.CURDIR} == ${BSDSRCDIR}/usr.sbin && defined(SETUID_SUEXEC) && \
+    ${SETUID_SUEXEC:U} == YES
+afterinstall:
+	@chmod u+s ${DESTDIR}/usr/sbin/suexec
+.endif
+</PRE>
+<EM>
+Данный фрагмент занимается разборками с suexec на тему вышеописанных настроек.
+</EM>
+
+<PRE>
+.if ${.CURDIR} == ${BSDSRCDIR}/gnu/usr.sbin/sendmail/sendmail && \
+    exists(/usr/local/include/sasl/sasl.h) && \
+    defined(SENDMAIL_SASL) && ${SENDMAIL_SASL:U} == YES
+ENVDEF+=		-DSASL -I/usr/local/include/sasl
+LDADD+=			-L/usr/local/lib -lsasl2
+.endif
+
+# Начиная с OpenBSD 3.6, libmilter автоматически собирается и
+# устанавливается.
+#.if ${.CURDIR} == ${BSDSRCDIR}/gnu/usr.sbin/sendmail && \
+#    defined(SENDMAIL_LIBMILTER) && ${SENDMAIL_LIBMILTER:U} == YES
+#WANT_LIBMILTER=		1
+#.if !make(install)
+#SUBDIR:=		libmilter ${SUBDIR}
+#.elif defined(INSTALL_LIBMILTER) && ${INSTALL_LIBMILTER:U} == YES
+#SUBDIR:=		libsm libmilter ${SUBDIR} 
+#
+#afterinstall:
+#	install -o ${BINOWN} -g ${BINGRP} -m ${DIRMODE} -d \
+#	    ${DESTDIR}/usr/include/libmilter
+#	install -o ${BINOWN} -g ${BINGRP} -m ${NONBINMODE} \
+#	    ${.CURDIR}/include/libmilter/*.h ${DESTDIR}/usr/include/libmilter
+#.endif
+#.endif
+#
+#.if (${.CURDIR} == ${BSDSRCDIR}/gnu/usr.sbin/sendmail/libmilter || \
+#    ${.CURDIR} == ${BSDSRCDIR}/gnu/usr.sbin/sendmail/sendmail) && \
+#    defined(SENDMAIL_LIBMILTER) && ${SENDMAIL_LIBMILTER:U} == YES
+#WANT_LIBMILTER=		1
+#.endif
+</PRE>
+<EM>
+Разборки с sendmail на тему вышеописанных настроек.
+</EM>
+
+<PRE>
+# Разборки с ppp
+#
+.if ${.CURDIR} == ${BSDSRCDIR}/usr.sbin/ppp/ppp && defined(PPP_PGSQL) && \
+    ${PPP_PGSQL:U} == YES && exists(/usr/local/lib/libpq.a) && \
+    ${.CURDIR} != ${.OBJDIR}
+CFLAGS+=		-DPOSTGRES -I/usr/local/include/postgresql
+CFLAGS+=		-I${.CURDIR}
+CLEANFILES+=		auth.c auth.c.orig bundle.h bundle.h.orig
+CLEANFILES+=		command.c command.c.orig
+
+DPADD+=			/usr/local/lib/libpq.a ${LIBSSL} ${LIBCRYPTO}
+LDADD+=			/usr/local/lib/libpq.a -lssl -lcrypto
+
+beforedepend: auth.c.orig bundle.h.orig command.c.orig
+
+auth.c.orig bundle.h.orig command.c.orig:
+.if !defined(SITE_REENTER)
+	@echo "Applying PostgreSQL authentication patch..." && \
+	    cp ${.CURDIR}/auth.c ${.CURDIR}/bundle.h ${.CURDIR}/command.c \
+		${.OBJDIR} && \
+	    patch -sp0 < ${SITEDIR}/patches/ppp-pgsql.patch && \
+	    cd ${.CURDIR} && ${MAKE} depend SITE_REENTER=Yes
+.endif
+.endif
+</PRE>
+<EM>
+Разборки с PPP на предмет включения поддержки PostgreSQL авторизации.
+</EM>
+
+<PRE>
+# Разборки с mount
+#
+.if ${.CURDIR} == ${BSDSRCDIR}/sbin/mount && defined(PATCH_MOUNT) && \
+    ${PATCH_MOUNT:U} == YES && ${.CURDIR} != ${.OBJDIR}
+CFLAGS+=		-I${.CURDIR}
+CLEANFILES+=		mount.c mount.c.orig
+
+beforedepend: mount.c.orig
+
+mount.c.orig:
+.if !defined(SITE_REENTER)
+	@echo "Patching mount..." && \
+	    cp ${.CURDIR}/mount.c ${.OBJDIR} && cd ${.OBJDIR} && \
+	    patch -sp0 < ${SITEDIR}/patches/mount.patch && \
+	    cd ${.CURDIR} && ${MAKE} depend SITE_REENTER=Yes
+.endif
+.endif
+</PRE>
+<EM>
+Разборки с mount на предмет укорачивания сообщений.
+</EM>
+
+<PRE>
+# Разборки с modload
+#
+.if ${.CURDIR} == ${BSDSRCDIR}/sbin/modload && defined(PATCH_MODLOAD) && \
+    ${PATCH_MODLOAD:U} == YES && ${.CURDIR} != ${.OBJDIR}
+
+CFLAGS+=		-I${.CURDIR}
+CLEANFILES+=		modload.8 modload.8.orig modload.c modload.c.orig
+
+beforedepend: modload.8.orig modload.c.orig
+
+modload.8.orig modload.c.orig:
+.if !defined(SITE_REENTER)
+	@echo "Patching modload..." && \
+	    cp ${.CURDIR}/modload.8 ${.CURDIR}/modload.c ${.OBJDIR} && \
+	    cd ${.OBJDIR} && patch -sp0 < ${SITEDIR}/patches/modload.patch && \
+	    cd ${.CURDIR} && ${MAKE} depend SITE_REENTER=Yes
+.endif
+.endif
+</PRE>
+<EM>
+Разборки с modload на предмет использования /dev/ksyms вместо /bsd и
+предотвращения краха при использовании в системе, загруженной не из /bsd.
+</EM>
+
+<PRE>
+# Разборки с локалью
+#
+.if ${.CURDIR} == ${BSDSRCDIR}/lib/libc && defined(PATCH_LOCALE) && \
+    ${PATCH_LOCALE:U} == YES && ${.CURDIR} != ${.OBJDIR}
+CLEANFILES+=            setlocale.c setlocale.c.orig
+
+beforedepend: setlocale.c.orig
+
+setlocale.c.orig:
+.if !defined(SITE_REENTER)
+	@echo "Patching locale..." && \
+	    cp ${.CURDIR}/locale/setlocale.c ${.OBJDIR} && cd ${.OBJDIR} && \
+	    patch -sp0 < ${SITEDIR}/patches/locale-hack.patch && \
+	    cd ${.CURDIR} && ${MAKE} depend SITE_REENTER=Yes
+.endif
+.endif
+</PRE>
+<EM>
+Разборки с локалью с целью подружить XKB и старые X программы, не умеющие
+им пользоваться.
+</EM>
+
+<PRE>
+# Разборки с игрушками
+#
+.if ${.CURDIR} == ${BSDSRCDIR} && defined(NO_GAMES) && ${NO_GAMES:U} == YES
+SKIPDIR+=	games
+.endif
+
+# Разборки с библиотеками
+#
+.if defined(NO_PROFILE) && ${NO_PROFILE:U} == YES && \
+    ${.CURDIR:C/^${BSDSRCDIR}\/lib\///1} != ${.CURDIR}
+NOPROFILE=
+.endif
+</PRE>
+<EM>
+Разборки с играми и profiled библиотеками на предмет надобности их собирать
+и устанавливать.
+</EM>
+
+<PRE>
+# Разборки с crunch
+#
+.if ${.CURDIR} == ${BSDSRCDIR} && defined(CRUNCH) && ${CRUNCH:U} == YES && \
+    !make(obj) && !make(clean) && !make(cleandir)
+SUBDIR+=	distrib/crunch
+.endif
+</PRE>
+<EM>
+Разборки с crunchgen и crunchide на предмет сборки и установки их.
+</EM>
+
+<P>
+<HR>
+<A HREF="index-1.html" tppabs="http://www.openbsd.ru/docs/index.html"><IMG HEIGHT="24" WIDTH="24" SRC="back.gif" tppabs="http://www.openbsd.ru/images/back.gif"
+ ALT="OpenBSD.ru"></A>
+<A HREF="mailto:www@openbsd.ru">www@openbsd.ru</A>
+<BR>
+<SMALL>$RuOBSD: howto-mkconf.html,v 1.31 2010/11/01 10:57:47 dinar Exp $</SMALL>
+
+</BODY>
+</HTML>

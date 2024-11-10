@@ -1,0 +1,265 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+<HEAD>
+  <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=koi8-r">
+  <META HTTP-EQUIV="Content-Language" CONTENT="ru">
+  <META NAME="copyright" content="Copyright (c) 2004 by OpenBSD.ru">
+  <TITLE>Администрирование</TITLE>
+  <link rel="stylesheet" type="text/css" href="../../style.css" />
+</HEAD>
+
+<BODY>
+
+<H2>Администрирование</H2>
+<HR>
+
+<UL>
+  <LI><A HREF="#conf">Зачем нужен файл /etc/rc.conf.local если
+   есть /etc/rc.conf</A>
+  <LI><A HREF="#wheel">Почему su говорит &quot;you are not in group wheel&quot;
+   при попытке сменить права на root</A>
+  <LI><A HREF="#fscopy">Как скопировать файловую систему</A>
+  <LI><A HREF="#ftponly">Как создать учетную запись только для ftp</A>
+  <LI><A HREF="#ftpchroot">Как ограничить пространство, доступное пользователю
+   по FTP его домашним каталогом</A>
+  <LI><A HREF="#hideproc">Как запретить пользователям смотреть чужие
+   процессы</A>
+  <LI><A HREF="#lkmperm">Почему при загрузке LKM выдается сообщение
+   &quot;modload: can't reserve memory: Operation not permitted&quot;</A>
+</UL>
+<HR>
+
+
+<A NAME="conf"></A>
+<H3>Зачем нужен файл /etc/rc.conf.local если есть
+  /etc/rc.conf</H3>
+
+Файл <span>/etc/rc.conf.local</span> используется для того,
+чтобы изменить настройки по умолчанию (прописанные в
+<span>/etc/rc.conf</span>). Использование отдельного файла
+позволяет при обновлении системы просто заменить файл
+<span>/etc/rc.conf</span> новым, сохранив при этом ранее
+сделанные настройки.
+
+
+<A NAME="wheel"></A>
+<H3>Почему su говорит
+  &quot;you are not in group wheel&quot; при попытке сменить права на root</H3>
+
+По умолчанию в BSD системах из соображений дополнительной защиты переход
+на права <span>root</span> с помощью
+<span>su(1)</span> возможен только для пользователей, входящих
+в группу <span>wheel</span>. При этом в OpenBSD в отличие
+например от FreeBSD пользователь должен быть явно добавлен в группу в файле
+<span>/etc/group</span>. Установки группы
+<span>wheel</span> в качестве базовой группы недостаточно.
+Можно также разрешить всем пользователям переход на права
+<span>root</span>. Для этого достаточно удалить всех
+пользователей (включая <span>root</span>) из группы
+<span>wheel</span> в файле
+<span>/etc/group</span>.
+
+
+<A NAME="fscopy"></A>
+<H3>Как скопировать файловую систему</H3>
+
+Для копирования файловой системы целиком лучше использовать команды
+<A HREF="http://www.openbsd.org/cgi-bin/man.cgi?query=dump&amp;sektion=8">dump(8)</A>
+и <A HREF="http://www.openbsd.org/cgi-bin/man.cgi?query=restore&amp;sektion=8">restore(8)</A>.
+Если требуется скопировать только часть файловой системы следует воспользоваться
+командой <A HREF="http://www.openbsd.org/cgi-bin/man.cgi?query=tar&amp;sektion=1">tar(1)</A>.
+Ниже приведены примеры копирования файловой системы целиком и отдельной части
+файловой системы.
+
+<P>
+Копируем /usr в раздел <span>g</span> диска
+<span>wd1</span>:
+
+<PRE>
+<STRONG>
+# newfs wd1g
+# mount -o async /dev/wd1g /mnt
+# dump 0f - /usr | (cd /mnt; restore rf -)
+</STRONG>
+</PRE>
+
+В данном примере мы смонтировали новую файловую систему с опцией
+<span>async</span> для ускорения копирования. Не забудьте
+перемонтировать файловую систему без этой опции если планируется оставить ее
+смонтированной во избежание потерь в случае сбоя.
+
+<P>
+Копируем /usr/src в каталог /mnt/usr:
+
+<PRE>
+<STRONG>
+# cd /usr
+# tar cf - src | (cd /mnt/usr; tar xpf -)
+</STRONG>
+</PRE>
+
+При копировании небольших объемов информации для которых не требуется точного
+сохранения структуры жестких ссылок и распределенного пространства под файлы
+можно воспользоваться командой
+<A HREF="http://www.openbsd.org/cgi-bin/man.cgi?query=cp&amp;sektion=1">cp(1)</A>:
+
+<PRE>
+<STRONG>
+# cp -RPp mydir otherdir
+</STRONG>
+</PRE>
+
+
+<A NAME="ftponly"></A>
+<H3>Как создать учетную запись только для ftp</H3>
+
+Очень часто для решения данного вопроса пользователю устанавливают в качестве
+shell что-нибудь вроде <span>/bin/false</span> и добавляют его
+в <span>/etc/shells</span>. Такое решение является неверным
+и очень часто бесполезным так как по сути позволяет пользователю поменять
+shell с помощью файла <span>.forward</span> (если на хосте
+запущен sendmail и не используется опция smrsh). Существуют также другие
+соображения против такого решения. Не вдаваясь в подробности, предложим
+другие варианты решения данного вопроса.
+
+<P>
+Чаще всего при разрешении доступа по FTP реальным пользователям, им
+ограничивают доступное пространство домашним каталогом из соображений защиты
+(см. вопрос <A HREF="#ftpchroot">как ограничить пространство, доступное
+пользователю по FTP его домашним каталогом</A>).
+В этом случае создание учетной записи только для ftp сводится к установке
+пользователю <span>/sbin/nologin</span> в качестве shell и
+добавление опции <span>-A</span> в командную строку запуска
+ftpd в файле <span>/etc/inetd.conf</span> или в
+<span>/etc/rc.conf.local</span> (если ftpd запускается как
+самостоятельный сервер).
+
+<P>
+Другим решением вопроса может быть установка альтернативного FTP сервера,
+который разрешает вход пользователям, независимо от установленного shell.
+В OpenBSD портах в категории <span>net</span> есть
+FTP сервер <span>vsftpd</span> который позволяет выключить
+проверку shell для пользователя.
+
+<P>
+Еще одним вариантом решения вопроса может быть установка пользователю
+обычного shell с одновременным добавлением в login класс для которого в
+<A HREF="http://www.openbsd.org/cgi-bin/man.cgi?query=login.conf&amp;sektion=5">
+login.conf(5)</A> shell переустанавливается на
+<span>/sbin/nologin</span>.
+
+
+<A NAME="ftpchroot"></A>
+<H3>Как ограничить пространство, доступное пользователю
+по FTP его домашним каталогом</H3>
+
+По умолчанию ftpd позволяет реальным пользователям перемещаться по всему
+дереву каталогов системы. Чтобы ограничить доступное пространство домашним
+каталогом пользователя достаточно добавить его имя в файл
+<span>/etc/ftpchroot</span> или добавить пользователя в
+login класс для которого установлена опция
+<span>ftp-chroot</span>
+(см. <A HREF="http://www.openbsd.org/cgi-bin/man.cgi?query=login.conf&amp;sektion=5">
+login.conf(5)</A>).
+
+<P>
+Смотрите также вопрос
+<A HREF="#ftponly">как создать учетную запись только для ftp</A>.
+
+
+<A NAME="hideproc"></A>
+<H3>Как запретить пользователям смотреть
+чужие процессы</H3>
+
+Любой пользователь в системе может посмотреть список процессов с помощью
+команды
+<A HREF="http://www.openbsd.org/cgi-bin/man.cgi?query=ps&amp;sektion=1">ps(1)</A>.
+Чтобы граничить просмотр процессами, работающими с правами пользователя,
+подавшего команду можно воспользоваться загружаемым
+модулем <span>hideproc</span>, который можно скачать
+<A HREF="http://pdp-11.org.ru/~form/openbsd/">отсюда</A>.
+
+<P>
+Сначала следует собрать и установить модуль:
+
+<PRE>
+<STRONG>
+# make depend &amp;&amp; make &amp;&amp; make install
+</STRONG>
+</PRE>
+
+Помните что для сборки загружаемых модулей необходимы исходные тексты ядра
+системы, которые должны находиться в <span>/usr/src/sys</span>.
+
+<P>
+Далее нужно добавить следующую строку в файл
+<span>/etc/rc.securelevel</span>:
+
+<PRE>
+<STRONG>
+[ -f /usr/lkm/hideproc.o ] &amp;&amp; modload /usr/lkm/hideproc.o
+</STRONG>
+</PRE>
+
+По умолчанию модуль разрешает просмотр чужих процессов только для
+пользователей, входящих в группу <span>wheel</span>.
+Чтобы изменить настройки модуля добавьте в
+<span>/etc/rc.local</span> следующие строки:
+
+<PRE>
+<STRONG>
+#
+# Пользователи, входящие в группу staff, имеют право смотреть чужие процессы.
+#
+if [ -c /dev/hideproc -a -x /usr/local/sbin/hideprocctl ]; then
+	/usr/local/sbin/hideprocctl staff
+fi
+</STRONG>
+</PRE>
+
+Можно также задать обратное условие - запретить просмотр чужих процессов
+пользователям, входящим в заданную группу:
+
+<PRE>
+<STRONG>
+#
+# Пользователи, входящие в группу users, не имеют права смотреть чужие процессы.
+#
+if [ -c /dev/hideproc -a -x /usr/local/sbin/hideprocctl ]; then
+	/usr/local/sbin/hideprocctl \!users
+fi
+</STRONG>
+</PRE>
+
+
+<A NAME="lkmperm"></A>
+<H3>Почему при загрузке LKM выдается сообщение
+&quot;modload: can't reserve memory: Operation not permitted&quot;</H3>
+
+В BSD системах используется механизм уровней защиты ядра (securelevel).
+По умолчанию OpenBSD работает на уровне защиты 1, не позволяющем загружать
+или выгружать модули
+(см.
+<A HREF="http://www.openbsd.org/cgi-bin/man.cgi?query=securelevel&amp;sektion=7">
+securelevel(7)</A>). Поэтому все команды загрузки LKM должны выполняться в
+однопользовательском режиме или из файла
+<span>/etc/rc.securelevel</span>. Если требуется часто
+загружать и выгружать модули (например для отладки), можно отредактировать
+<span>/etc/rc.securelevel</span>, запретив повышать
+securelevel при загрузке:
+
+<PRE>
+<STRONG>
+securelevel=-1
+</STRONG>
+</PRE>
+
+
+<HR>
+<A HREF="../"><IMG HEIGHT="24" WIDTH="24" SRC="../../images/back.gif"
+  ALT="OpenBSD.ru"></A>
+<A HREF="mailto:www@openbsd.ru">www@openbsd.ru</A><BR>
+<SMALL>$RuOBSD: admin.html,v 1.15 2010/11/01 10:57:48 dinar Exp $</SMALL>
+
+</BODY>
+</HTML>

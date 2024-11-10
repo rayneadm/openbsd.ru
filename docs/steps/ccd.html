@@ -1,0 +1,213 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=koi8-r">
+<meta http-equiv="Content-Language" content="ru">
+<meta name="copyright" content="Copyright (c) 2005,2007 by OpenBSD.ru">
+<title>OpenBSD: Зеркалирование данных с помощью ccd</title>
+<link rel="stylesheet" type="text/css" href="../../style.css">
+</head>
+
+<body>
+
+<h2>OpenBSD: Зеркалирование данных с помощью ccd</h2>
+<hr>
+
+<h3>Мини-руководство "шаг за шагом"</h3>
+
+<p>
+<table border=0>
+<tr><td>
+
+<p>
+OpenBSD установлена на <code>sd0</code>. Требуется подключить <code>sd1</code>
+и производить автоматическое копирование данных с <code>sd0</code>. Для этих
+целей будем использовать
+<a href="http://www.openbsd.org/cgi-bin/man.cgi?query=ccd&amp;sektion=4">ccd(4)</a>.
+На разделы
+<a href="http://www.openbsd.org/cgi-bin/man.cgi?query=ccd&amp;sektion=4">ccd(4)</a>
+следует перенести <span>/home</span>,
+<span>/var</span> и <span>/usr</span>.
+Перенести корневую файловую систему нельзя, поскольку ядро не поддерживает
+загрузку с этого типа устройств. Рекомендуется остановить запущенные процессы
+и при наличии локального доступа к машине выполнять все операции в
+однопользовательском режиме.
+
+<p>
+Текущая система:
+
+<pre>
+# <strong>df -h</strong>
+Filesystem     Size    Used   Avail Capacity  Mounted on
+/dev/sd0a      490M    27.6M   438M     6%    /
+/dev/sd0d      38.4G   4.0M    36.5G    0%    /home
+/dev/sd0e      982M    6.0K    933M     0%    /tmp
+/dev/sd0f      17.5G   821M    15.9G    5%    /usr
+/dev/sd0g      9.6G    7.1M    9.1G     0%    /var
+</pre>
+
+<p>
+Уже сейчас можно составить конфиг для создания устройств
+<a href="http://www.openbsd.org/cgi-bin/man.cgi?query=ccd&amp;sektion=4">ccd(4)</a>
+при загрузке системы:
+
+<pre>
+# <strong>vi /etc/ccd.conf</strong>
+ccd0    16      CCDF_MIRROR     /dev/sd0d /dev/sd1d
+ccd1    16      CCDF_MIRROR     /dev/sd0g /dev/sd1g
+ccd2    16      CCDF_MIRROR     /dev/sd0f /dev/sd1f
+</pre>
+
+<p>
+Предварительно делаем бэкап <span>/home</span> и
+<span>/var</span> в <span>/usr/dump</span>,
+иначе данные на дисках будут утеряны:
+
+<pre>
+# <strong>mkdir /usr/dump</strong>
+# <strong>dump -a -f /usr/dump/var.dump /var</strong>
+# <strong>dump -a -f /usr/dump/home.dump /home</strong>
+# <strong>umount -f /var</strong>
+# <strong>umount -f /home</strong>
+</pre>
+
+<p>
+После размонтирования необходимо внести соответствующие изменения в 
+<span>/etc/fstab</span> (старые записи больше не понадобятся):
+
+<pre>
+# <strong>vi /etc/fstab</strong>
+/dev/sd0a / ffs rw 1 1
+/dev/ccd1e /home ffs rw,nodev,nosuid 1 2
+/dev/sd0e /tmp ffs rw,nodev,nosuid 1 2
+/dev/ccd2e /usr ffs rw,nodev 1 2
+/dev/ccd0e /var ffs rw,nodev,nosuid 1 2
+</pre>
+
+<p>
+Создаем два устройства
+<a href="http://www.openbsd.org/cgi-bin/man.cgi?query=ccd&amp;sektion=4">ccd(4)</a>
+(для <span>/home</span> и <span>/var</span>):
+
+<pre>
+# <strong>ccdconfig ccd0 16 CCDF_MIRROR /dev/sd0d /dev/sd1d</strong>
+# <strong>ccdconfig ccd1 16 CCDF_MIRROR /dev/sd0g /dev/sd1g</strong>
+</pre>
+
+<p>
+Для каждого из созданных устройств меняем тип раздела "с" на <code>unused</code>
+и создаем одну большую партицию "e" с типом <code>4.2BSD</code> на весь диск:
+
+<pre>
+# <strong>disklabel -E ccd0</strong>
+&gt; m c
+&gt; [4.2BSD] unused
+&gt; a e 
+</pre>
+
+<p>
+И для <code>ccd1</code>:
+
+<pre>
+# <strong>disklabel -E ccd1</strong>
+&gt; m c
+&gt; [4.2BSD] unused
+&gt; a e
+</pre>
+
+<p>
+Создаем файловые системы:
+
+<pre>
+# <strong>newfs ccd0e</strong>
+# <strong>newfs ccd1e</strong>
+</pre>
+
+<p>
+Снова монтируем <span>/var</span> и
+<span>/home</span>, но уже как устройства
+<a href="http://www.openbsd.org/cgi-bin/man.cgi?query=ccd&amp;sektion=4">ccd(4)</a>.
+Восстанавливаем данные из резервной копии:
+
+<pre>
+# <strong>mount /var</strong>
+# <strong>cd /var &amp;&amp; restore -r -f /usr/dump/var.dump</strong>
+# <strong>mount /home</strong>
+# <strong>cd /home &amp;&amp; restore -r -f /usr/dump/home.dump</strong>
+</pre>
+
+<p>
+Подготавливаем бэкап <span>/usr</span>:
+
+<pre>
+# <strong>mkdir /home/dump</strong>
+# <strong>dump -a -f /home/dump/usr.dump /usr</strong>
+</pre>
+
+<p>
+Перегружаемся в single user mode (удаленно размонтировать
+<span>/usr</span> нельзя). Делаем с <code>ccd2</code> то же
+самое, что делали ранее с <code>ccd0</code> и <code>ccd1</code>:
+
+<pre>
+# <strong>ccdconfig ccd2 16 CCDF_MIRROR /dev/sd0f /dev/sd1f</strong>
+# <strong>disklabel -E ccd2</strong>
+&gt; m c
+&gt; [4.2BSD] unused
+&gt; a e
+
+# <strong>newfs ccd2e</strong>
+# <strong>mount /usr</strong>
+</pre>
+
+<p>
+Создаем <code>ccd0</code> и монтируем <span>/home</span>:
+
+<pre>
+# <strong>ccdconfig ccd0 16 CCDF_MIRROR /dev/sd0d /dev/sd1d</strong>
+# <strong>mount /home</strong>
+</pre>
+
+<p>
+Возвращаем данные на <span>/usr</span>:
+
+<pre>
+# <strong>cd /usr &amp;&amp; restore -r -f /home/dump/usr.dump</strong>
+</pre>
+
+<p>
+Перезагружаемся:
+
+<pre>
+# <strong>reboot</strong>
+</pre>
+
+<p>
+В итоге получаем:
+
+<pre>
+# <strong>df -h</strong>
+Filesystem     Size    Used   Avail Capacity  Mounted on
+/dev/sd0a      490M   27.6M    438M     6%    /
+/dev/ccd1e    38.4G    4.0M   36.5G     0%    /home
+/dev/sd0e      982M    6.0K    933M     0%    /tmp
+/dev/ccd2e    17.5G    815M   15.9G     5%    /usr
+/dev/ccd0e     9.6G    7.1M    9.1G     0%    /var
+</pre>
+
+<p>
+Статья основана на материалах, предоставленных Антоном Карповым
+<a href="http://www.toxahost.ru/">www.toxahost.ru</a>.
+
+</td></tr>
+</table>
+
+<p>
+<hr>
+<a href="index.html"><img height=24 width=24 src="../../images/back.gif" alt="OpenBSD.ru"></a>
+<a href="mailto:www@openbsd.ru">www@openbsd.ru</a>
+<br>
+<small>$RuOBSD: ccd.html,v 1.11 2010/11/01 10:57:48 dinar Exp $</small>
+
+</body>
+</html>

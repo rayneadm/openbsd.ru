@@ -1,0 +1,188 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=koi8-r">
+<meta http-equiv="Content-Language" content="ru">
+<meta name="copyright" content="Copyright (c) 2005,2007 by OpenBSD.ru">
+<title>VPN: Настройка PPTP-сервера с использованием Poptop</title>
+<link rel="stylesheet" type="text/css" href="style.css" tppabs="http://www.openbsd.ru/style.css">
+</head>
+
+<body>
+
+<h2>VPN: Настройка PPTP-сервера с использованием Poptop</h2>
+<hr>
+
+<h3>Мини-руководство "шаг за шагом"</h3>
+
+<p>
+<table border=0>
+<tr><td>
+
+<p>
+Пример построения VPN на основе протокола PPTP с использованием Poptop.
+Сервер имеет внутренний IP 192.168.1.1, клиентам выдаются адреса из диапазона
+192.168.1.32-192.168.1.63. Для аутентификации используется MS-CHAP V2.
+
+<p>
+Включаем перенаправление IPv4-пакетов между сетевыми интерфейсами и разрешаем
+использование протокола GRE:
+
+<pre>
+# <strong>sysctl -w net.inet.ip.forwarding=1</strong>
+# <strong>sysctl -w net.inet.gre.allow=1</strong>
+</pre>
+
+<p>
+Добавляем соответствующие записи в <span>/etc/sysctl.conf</span>:
+
+<pre>
+# <strong>vi /etc/sysctl.conf</strong>
+net.inet.ip.forwarding=1
+net.inet.gre.allow=1
+</pre>
+
+<p>
+Устанавливаем <span>poptop</span> из портов:
+
+<pre>
+# <strong>cd /usr/ports/net/poptop</strong>
+# <strong>make install clean</strong>
+</pre>
+
+<p>
+Или с помощью прекомпилированного пакета:
+
+<pre>
+# <strong>pkg_add ftp://ftp.openbsd.org/pub/OpenBSD/3.8/packages/i386/poptop-1.1.4.b4p1.tgz</strong>
+</pre>
+
+<p>
+Перейдем к настройке PPP. Обратите внимание, что в файле
+<span>/etc/ppp/ppp.conf</span> cтроки, оканчивающиеся на
+``:'', вводятся без отступа в начале строки. Остальные строки должны быть
+введены с отступом, как показано в примере.
+
+<pre>
+# <strong>vi /etc/ppp/ppp.conf</strong>
+default:
+  set log Phase Chat LCP IPCP CCP tun command
+  disable ipv6cp
+
+pptp:
+  # используем MS-CHAP V2
+  enable MSChapV2
+  # используем алгоритм шифрования данных MPPE
+  set mppe 128 stateless
+  # стандартные методы компрессии не работают с MPPE
+  disable deflate pred1
+  deny deflate pred1
+  # отключаем таймер ожидания
+  set timeout 0
+  # задаем адрес VPN шлюза и диапазон выдаваемых клиентам адресов
+  set ifaddr 192.168.1.1 192.168.1.32-192.168.1.63 255.255.255.255
+  # разрешаем получение адреса DNS сервера и передаем его клиенту
+  accept dns
+  set dns 192.168.50.70
+  # при необходимости включаем ARP proxy
+  enable proxy
+</pre>
+
+<p>
+Создание или изменение учетных записей пользователей производится за счет
+редактирования файла <span>/etc/ppp/ppp.secret</span>. Если
+IP-адрес должен быть динамическим, тогда вместо поля <tt>ip_address</tt>
+нужно поставить знак звездочки (``*''). Поле <tt>label</tt> является
+необязательным. Например:
+
+<pre>
+# <strong>vi /etc/ppp/ppp.secret</strong>
+#user	password	ip_address	label
+user1	secret123	192.168.1.40	sidorov
+user2	123qwe		*
+</pre>
+
+<p>
+Выставляем корректные права доступа:
+
+<pre>
+# <strong>chmod 600 /etc/ppp/ppp.{conf,secret}</strong>
+</pre>
+
+<p>
+Запускаем <span>pptpd</span>:
+
+<pre>
+# <strong>/usr/local/sbin/pptpd</strong>
+</pre>
+
+<p>
+В <span>/etc/rc.local</span> добавляем автозапуск
+<span>pptpd</span>:
+
+<pre>
+if [ -x /usr/local/sbin/pptpd ]; then
+	echo -n 'pptpd';	/usr/local/sbin/pptpd
+fi
+</pre>
+
+<p>
+Настройка
+<a href="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=pf&sektion=4  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=pf&sektion=4'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=pf&sektion=4">pf(4)</a>
+на корректную работу с PPTP заключается в разрешении GRE трафика к и от
+клиентов, а также разрешении входящих соединений по 1723/tcp.
+
+<p>
+Приведем пример настройки маршрутизатора, обеспечивающего доступ в Интернет
+клиентов, подключающихся по PPTP:
+
+<pre>
+<b>ext_if  = "fxp0"</b>
+<b>int_if  = "fxp1"</b>
+<b>vpn_grp = "tun"</b>
+
+<b>table &lt;vpn_users&gt; { 192.168.1.32/27 }</b>
+
+<b>set skip on lo</b>
+
+# Трансляция адресов только для пользователей, использующих PPTP
+<b>nat on $ext_if inet from &lt;vpn_users&gt; -&gt; ($ext_if:0)</b>
+
+# Запрет на входящие соединения
+<b>block in</b>
+<b>block return-rst in proto tcp</b>
+
+# Разрешить исходящие соединения
+<b>pass out keep state</b>
+
+# Разрешить управляющее соединение
+<b>pass in on $int_if inet proto tcp from ($int_if:network) to ($int_if) \
+	port pptp keep state</b>
+
+# Разрешить использование трафика, инкапсулированного в GRE
+<b>pass in on $int_if inet proto gre from ($int_if:network) to ($int_if) \
+	keep state</b>
+
+# Разрешить трафик на туннельном интерфейсе
+<b>pass in on $vpn_grp inet from &lt;vpn_users&gt; to ! (self) keep state</b>
+</pre>
+
+<p>
+Дополнительную информацию можно узнать из man-страниц: pptpd(8),
+<a href="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=ppp&sektion=8  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=ppp&sektion=8'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=ppp&sektion=8">ppp(8)</a>.
+
+<p>
+Статья основана на материалах, предоставленных Гнединым Алексеем aka Goblin.
+
+</td></tr>
+</table>
+
+<p>
+<hr>
+<a href="javascript:if(confirm('http://www.openbsd.ru/docs/steps/index.html  \n\nThis file was not retrieved by Teleport Ultra, because it is linked too far away from its Starting Address. If you increase the in-domain depth setting for the Starting Address, this file will be queued for retrieval.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.ru/docs/steps/index.html'" tppabs="http://www.openbsd.ru/docs/steps/index.html"><img height=24 width=24 src="back.gif" tppabs="http://www.openbsd.ru/images/back.gif" alt="OpenBSD.ru"></a>
+<a href="mailto:www@openbsd.ru">www@openbsd.ru</a>
+<br>
+<small>$RuOBSD: pptp.html,v 1.32 2010/11/01 10:57:49 dinar Exp $</small>
+
+</body>
+</html>

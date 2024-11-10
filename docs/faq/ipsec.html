@@ -1,0 +1,379 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+<HEAD>
+  <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=koi8-r">
+  <META HTTP-EQUIV="Content-Language" CONTENT="ru">
+  <META NAME="copyright" content="Copyright (c) 2004 by OpenBSD.ru">
+  <TITLE>Настрока IPSec</TITLE>
+  <link rel="stylesheet" type="text/css" href="../../style.css" />
+</HEAD>
+
+<BODY>
+
+<H2>Настройка IPSec</H2>
+<HR>
+
+<UL>
+  <LI><A HREF="#isakmpd">Как настроить ISAKMPD (IKE)</A>
+  <LI><A HREF="#windows">Как связать OpenBSD и Windows 2000/XP</A>
+  <LI><A HREF="#pix">Как связать OpenBSD и Cisco PIX</A>
+</UL>
+<HR>
+
+
+<A NAME="isakmpd"></A>
+<H3>Как настроить ISAKMP (IKE)</H3>
+
+В данном примере рассматривается настройка IPSec для защиты трафика между
+двумя хостами с использованием протокола обмена ключами ISAKMP
+(<span>RFC 2407</span>, <span>RFC 2408</span>,
+<span>RFC 2409</span>). Здесь рассматривается один
+вариант настройки ISAKMP для защиты трафика между двумя хостами. Более
+подробную информацию о других вариантах настройки можно получить по указанным
+ниже ссылкам. Смотрите также вопрос
+<A HREF="ipsecctl.html">Настройка IPsec с помощью ipsecctl</A>.
+
+
+<P>
+Создаем файл <span>/etc/isakmpd/isakmpd.policy</span>
+на каждом хосте. Этот файл будет одинаковым для хостов <STRONG>A</STRONG> и
+<STRONG>B</STRONG>:
+
+<PRE>
+<STRONG>
+KeyNote-Version: 2
+Authorizer: &quot;POLICY&quot;
+Licensees: &quot;passphrase:mekmitasdigoat&quot;
+Conditions: app_domain == &quot;IPsec policy&quot; &&
+            esp_present == &quot;yes&quot; &&
+            esp_enc_alg == &quot;aes&quot; &&
+            esp_auth_alg == &quot;hmac-sha&quot; -> &quot;true&quot;;
+</STRONG>
+</PRE>
+
+Вместо &quot;mekmitasdigoat&quot; следует указать фразу, которая будет
+использоваться в качестве ключа для установки соединения. Эта фраза должна
+совпадать для хостов <STRONG>A</STRONG> и <STRONG>B</STRONG>. Далее нам
+потребуется файлы <span>/etc/isakmpd/isakmpd.conf</span> для
+каждого из хостов:
+
+<PRE>
+<STRONG>
+[General]
+Listen-on=		192.168.64.1
+Shared-SADB=		Defined
+
+[Phase 1]
+192.168.64.15=		ISAKMP-peer-B
+Default=		ISAKMP-peer-B-aggressive
+
+[Phase 2]
+Connections=		IPsec-A-B
+
+[ISAKMP-peer-B]
+Phase=			1
+Transport=              udp
+Local-address=		192.168.64.1
+Address=		192.168.64.15
+Configuration=		Default-main-mode
+Authentication=		mekmitasdigoat
+
+[ISAKMP-peer-B-aggressive]
+Phase=			1
+Transport=		udp
+Local-address=		192.168.64.1
+Address=		192.168.64.15
+Configuration=		Default-aggressive-mode
+Authentication=		mekmitasdigoat
+
+[IPsec-A-B]
+Phase=			2
+ISAKMP-peer=		ISAKMP-peer-B
+Configuration=		Default-quick-mode
+Local-ID=		Net-A
+Remote-ID=		Net-B
+
+[Net-B]
+ID-type=		IPV4_ADDR_SUBNET
+Network=		192.168.64.15
+Netmask=		255.255.255.255
+
+[Net-A]
+ID-type=		IPV4_ADDR_SUBNET
+Network=		192.168.64.1
+Netmask=		255.255.255.255
+
+[Default-main-mode]
+DOI=			IPSEC
+EXCHANGE_TYPE=		ID_PROT
+Transforms=		3DES-SHA
+
+[Default-aggressive-mode]
+DOI=			IPSEC
+EXCHANGE_TYPE=		AGGRESSIVE
+Transforms=		3DES-SHA-RSA
+
+[Default-quick-mode]
+DOI=			IPSEC
+EXCHANGE_TYPE=		QUICK_MODE
+Suites=			QM-ESP-AES-SHA-PFS-SUITE
+</STRONG>
+</PRE>
+
+<P>
+Файл <span>/etc/isakmpd/isakmpd.conf</span> для хоста
+<STRONG>B</STRONG>:
+
+<PRE>
+<STRONG>
+[General]
+Listen-on=		192.168.64.15
+Shared-SADB=		Defined
+
+[Phase 1]
+192.168.64.1=		ISAKMP-peer-A
+Default=		ISAKMP-peer-A-aggressive
+
+[Phase 2]
+Connections=		IPsec-B-A
+
+[ISAKMP-peer-A]
+Phase=			1
+Transport=		udp
+Local-address=		192.168.64.15
+Address=		192.168.64.1
+Configuration=		Default-main-mode
+Authentication=		mekmitasdigoat
+
+[ISAKMP-peer-A-aggressive]
+Phase=			1
+Transport=		udp
+Local-address=		192.168.64.15
+Address=		192.168.64.1
+Configuration=		Default-aggressive-mode
+Authentication=		mekmitasdigoat
+
+[IPsec-B-A]
+Phase=			2
+ISAKMP-peer=		ISAKMP-peer-A
+Configuration=		Default-quick-mode
+Local-ID=		Net-B
+Remote-ID=		Net-A
+
+[Net-B]
+ID-type=		IPV4_ADDR_SUBNET
+Network=		192.168.64.15
+Netmask=		255.255.255.255
+
+[Net-A]
+ID-type=		IPV4_ADDR_SUBNET
+Network=		192.168.64.1
+Netmask=		255.255.255.255
+
+[Default-main-mode]
+DOI=			IPSEC
+EXCHANGE_TYPE=		ID_PROT
+Transforms=		3DES-SHA
+
+[Default-aggressive-mode]
+DOI=			IPSEC
+EXCHANGE_TYPE=		AGGRESSIVE
+Transforms=		3DES-SHA-RSA
+
+[Default-quick-mode]
+DOI=			IPSEC
+EXCHANGE_TYPE=		QUICK_MODE
+Suites=			QM-ESP-AES-SHA-PFS-SUITE
+</STRONG>
+</PRE>
+
+Не забудьте установить права, запрещающие чтение файлов конфигурации isakmpd
+простыми пользователями:
+
+<PRE>
+<STRONG>
+# chmod 600 /etc/isakmpd/isakmpd.conf /etc/isakmpd/isakmpd.policy
+</STRONG>
+</PRE>
+
+Теперь остается только запустить <span>isakmpd</span> на
+каждом из хостов:
+
+<PRE>
+<STRONG>
+# isakmpd -4
+</STRONG>
+</PRE>
+
+Для автоматического запуска isakmpd следует отредактировать файл
+<span>/etc/rc.conf.local</span>:
+
+<PRE>   
+<STRONG>
+isakmpd_flags=&quot;-4&quot;
+</STRONG>
+</PRE>
+
+Для гарантии защиты трафика следует также добавить правила
+<span>pf(4)</span>, разрешающие трафик между данными
+хостами только по протоколам <span>ESP</span> и
+<span>UDP (порты источника и приемника 500)</span>.
+
+<P>
+Смотрите также по данной теме:
+<A HREF="http://www.openbsd.org/cgi-bin/man.cgi?query=isakmpd.conf&amp;sektion=5">isakmpd.conf(5)</A>,
+<A HREF="http://www.openbsd.org/cgi-bin/man.cgi?query=isakmpd.policy&amp;sektion=5">isakmpd.policy(5)</A>,
+<A HREF="http://www.openbsd.org/cgi-bin/man.cgi?query=isakmpd&amp;sektion=8">isakmpd(8)</A>,
+<A HREF="http://www.openbsd.org/cgi-bin/man.cgi?query=vpn&amp;sektion=8">vpn(8)</A>,
+<A HREF="http://www.openbsdsupport.org/vpn-ipsec.html">http://www.openbsdsupport.org/vpn-ipsec.html</A>,
+<span>/usr/share/ipsec/isakmpd</span>.
+
+
+<A NAME="windows"></A>
+<H3>Как связать OpenBSD и Windows 2000/XP</H3>
+
+В данном примере рассказывается как установить защищенное IPSec соединение
+между OpenBSD и Windows 2000/XP с использованием протокола ISAKMP. Пример
+описывает соединение с Windows XP, однако тем же способом можно настроить
+Windows 2000 (возможно с небольшими изменениями).
+
+<P>
+Исходные данные:
+хост <STRONG>A</STRONG> (<STRONG>OpenBSD</STRONG>, адрес <STRONG>192.168.64.1</STRONG>),
+хост <STRONG>B</STRONG> (<STRONG>Windows XP</STRONG>, адрес <STRONG>192.168.64.15</STRONG>).
+
+<P>
+Информацию о настройке <STRONG>OpenBSD</STRONG> хоста <STRONG>A</STRONG>
+смотрите в описании вопроса <A HREF="#isakmpd">как настроить ISAKMPD (IKE)</A>.
+Для настройки <STRONG>Windows XP</STRONG> хоста <STRONG>B</STRONG> выполните
+следующие действия:
+
+<UL>
+  <LI>Запустите команду <span>mmc</span> из меню
+    <span>Start</span> / <span>Run</span>
+     панели задач.
+  <LI>Выберите пункт меню <span>File</span> /
+    <span>Add/Remove Snap-in...</span>
+  <LI>Кликните кнопку <span>Add</span>, в открывшемся окне
+    выберите пункт <span>IP Security Policy Management</span>
+    и кликните кнопку <span>Add</span>
+  <LI>Пройдите пошагово открывшийся wizard. При этом следует выбрать следующие
+    настройки:
+    <UL>
+      <LI><span><I>Select which computer or domain this snap-in
+        will manage</I></span> - <span>Local computer</span>
+    </UL>
+  <LI>Выберите пункт меню <span>Action</span> /
+    <span>Create IP Security Policy...</span>
+  <LI>Пройдите открывшийся wizard. При этом ВЫКЛЮЧИТЕ следующую настройку:
+    <UL>
+      <LI><span><I>Request for Secure Communication</I></span> -
+        <span>Activate the default responce rule</span>
+    </UL>
+  <LI>При завершении wizardа, включите настройку:
+    <UL>
+      <LI><span><I>Completing the IP Security wizard</I></span> -
+      <span>Edit properties</span>
+    </UL>
+  <LI>В открывшемся окне кликните кнопку <span>Add</span>
+  <LI>Пройдите открывшийся wizard, установите следующие настройки:
+    <UL>
+      <LI><span><I>Tunnel Endpoint</I></span> -
+        <span>This rule does not specify a tunnel</span>
+      <LI><span><I>Network Type</I></span> -
+        <span>Local Area Network (LAN)</span>
+      <LI><span><I>Authentication Method</I></span> -
+        <span>Use this string to protect the key exchange
+        (preshared key)</span> - здесь введите ключевую фразу, которая
+        использовалась при настройке OpenBSD хоста
+      <LI><span><I>IP Filter List</I></span> -
+        кликните кнопку <span>Add</span>
+      <LI>В открывшемся окне кликните кнопку <span>Add</span>
+      <LI>Пройдите wizard, введите следующие настройки:
+        <UL>
+          <LI><span><I>IP Traffic Source</I></span> -
+            <span>My IP Address</span>
+          <LI><span><I>IP Traffic Destination</I></span> -
+            <span>A Specific IP Address</span> -
+            <span>192.168.64.1</span>
+          <LI><span><I>IP Protocol Type</I></span> -
+            <span>Any</span>
+        </UL>
+      <LI>Выберите созданное правило и кликните кнопку
+        <span>Next</span>
+      <LI><span><I>Filter Action</I></span> -
+        <span>Require Security</span> - кликните кнопку
+         <span>Edit</span>
+      <LI>Установите следующие настройки:
+        <UL>
+          <LI><span>Negotiate security</span>
+          <LI><span>Seccion key perfect forward secrecy (PFS)</span>
+        </UL>
+    </UL>
+  <LI>Перезапустить сервис <span>IPSEC Services</span>
+  <LI>В правом окне приложения <span>mmc</span> выберите
+    созданное правило и кликните кнопку <span>Assign</span>
+    в панели инструментов (поднятый вверх переключатель)
+</UL>
+
+Проверьте результат настройки командой <span>ping</span>
+(на Windows хосте) - она должна ругнуться несколько раз
+&quot;Negotiating IP Security&quot;, после чего все должно заработать.
+
+<A NAME="pix"></A>
+<H3>Как связать OpenBSD и Cisco PIX</H3>
+
+В данном примере рассказывается как установить защищенное IPSec соединение
+между OpenBSD и Cisco PIX с использованием протокола ISAKMP. Пример
+описывает соединение с Cisco PIX (Cisco PIX Firewall Version 6.3(4)).
+
+<P>
+Исходные данные:
+хост <STRONG>A</STRONG> (<STRONG>OpenBSD</STRONG>, адрес <STRONG>192.168.64.1</STRONG>),
+хост <STRONG>B</STRONG> (<STRONG>Cisco PIX</STRONG>, адрес <STRONG>192.168.64.15</STRONG>).
+
+<P>
+Информацию о настройке <STRONG>OpenBSD</STRONG> хоста <STRONG>A</STRONG>
+смотрите в описании вопроса <A HREF="#isakmpd">как настроить ISAKMPD (IKE)</A>.
+Для настройки <STRONG>Cisco PIX</STRONG> хоста <STRONG>B</STRONG> выполните
+следующие команды:
+
+<PRE>
+<STRONG>
+pix(config)# access-list to_hostA permit ip host 192.168.64.15 host 192.168.64.1
+
+pix(config)# sysopt connection permit-ipsec
+
+pix(config)# crypto ipsec transform-set set_hostA esp-aes esp-sha-hmac
+
+pix(config)# crypto map newmap 10 ipsec-isakmp
+pix(config)# crypto map newmap 10 match address to_hostA
+pix(config)# crypto map newmap 10 set peer 192.168.64.1
+pix(config)# crypto map newmap 10 set transform-set set_hostA
+pix(config)# crypto map newmap interface outside
+
+pix(config)# isakmp enable outside
+pix(config)# isakmp key mekmitasdigoat address 192.168.64.1 netmask 255.255.255.255
+pix(config)# isakmp identity address
+pix(config)# isakmp policy 10 authentication pre-share
+pix(config)# isakmp policy 10 encryption 3des
+pix(config)# isakmp policy 10 hash sha
+pix(config)# isakmp policy 10 group 2
+pix(config)# isakmp policy 10 lifetime 86400
+
+pix(config)# exit
+</STRONG>
+</PRE>
+
+Проверьте результат настройки командой <span>ping</span>
+(на Cisco PIX) - она должна ругнуться несколько раз
+&quot;No response received&quot;, после чего все должно заработать.
+
+<HR>
+<A HREF="../"><IMG HEIGHT="24" WIDTH="24" SRC="../../images/back.gif"
+ ALT="OpenBSD.ru"></A>
+<A HREF="mailto:www@openbsd.ru">www@openbsd.ru</A><BR>
+<SMALL>$RuOBSD: ipsec.html,v 1.21 2010/11/01 10:57:48 dinar Exp $</SMALL>
+
+</BODY>
+</HTML>

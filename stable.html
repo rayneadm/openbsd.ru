@@ -1,0 +1,121 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=koi8-r">
+<meta http-equiv="Content-Language" content="ru">
+<meta name="copyright" content="Copyright (c) 2005,2007 by OpenBSD.ru">
+<title>OpenBSD: Описание процесса обновления системы до ветки -stable</title>
+<link rel="stylesheet" type="text/css" href="style.css" tppabs="http://www.openbsd.ru/style.css">
+</head>
+
+<body>
+
+<h2>OpenBSD: Описание процесса обновления системы до ветки -stable</h2>
+<hr>
+
+<h3>Мини-руководство "шаг за шагом"</h3>
+
+<p>
+<table border=0>
+<tr><td>
+
+<p>
+Указываем расположение общедоступного AnonCVS-сервера:
+
+<pre>
+# <strong>export CVSROOT=anoncvs@anoncvs.ca.openbsd.org:/cvs</strong>
+</pre>
+
+<p>
+Вот таким образом можно получить исходный код OpenBSD 4.2 ветки -stable:
+
+<pre>
+# <strong>cd /usr</strong>
+# <strong>cvs -fqz3 checkout -rOPENBSD_4_2 -P src</strong>
+</pre>
+
+<p>
+Чтобы произвести обновление исходного кода до 4.2-stable:
+
+<pre>
+# <strong>cd /usr/src</strong>
+# <strong>cvs -fqz3 update -rOPENBSD_4_2 -PAd</strong>
+</pre>
+
+<p>
+Выполняем перекомпиляцию и установку нового ядра:
+
+<pre>
+# <strong>cd /usr/src/sys/arch/i386/conf</strong>
+# <strong>config GENERIC</strong>
+# <strong>cd ../compile/GENERIC</strong>
+# <strong>make clean depend &amp;&amp; make</strong>
+# <strong>make install</strong>
+# <strong>shutdown -r now</strong>
+</pre>
+
+<p>
+Переcобираем пользовательское пространство:
+
+<pre>
+# <strong>rm -rf /usr/obj/*</strong>
+# <strong>cd /usr/src</strong>
+# <strong>make obj && make build</strong>
+</pre>
+
+<p>
+<br>
+<span><b>Примечание 1</b></span>. В случае останова процесса
+пересборки системы вот так можно получить список уже выполненных команд:
+
+<pre>
+# <strong>make -n build</strong>
+</pre>
+
+<p>
+Для возобновления процесса необходимо повторно выполнить последнюю команду из
+этого списка, например:
+
+<pre>
+# <strong>make depend &amp;&amp; make &amp;&amp; make install</strong>
+</pre>
+
+<p>
+<span><b>Примечание 2</b></span>. Чтобы не root пользователь
+мог перекомпилировать ядро, убедитесь, что он входит в группу wsrc, и у него
+есть права на запись в директорию <span>/usr/src</span>:
+
+<pre>
+# <strong>chmod -R g+w /usr/src</strong>
+</pre>
+
+<p>
+Чтобы дать возможность пользователю builder производить перекомпиляцию системы,
+нужно соответствующим образом настроить
+<a href="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=sudo&sektion=8  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=sudo&sektion=8'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=sudo&sektion=8">
+sudo(8)</a>:
+
+<pre>
+# <strong>visudo</strong>
+builder  ALL=(ALL)       NOPASSWD: ALL
+</pre>
+
+<p>
+И разрешить ему выполнение цели install во время работы ``<tt>make build</tt>'':
+
+<pre>
+# <strong>echo SUDO=sudo &gt;&gt; /etc/mk.conf</strong>
+</pre>
+
+</td></tr>
+</table>
+
+<p>
+<hr>
+<a href="javascript:if(confirm('http://www.openbsd.ru/docs/steps/index.html  \n\nThis file was not retrieved by Teleport Ultra, because it is linked too far away from its Starting Address. If you increase the in-domain depth setting for the Starting Address, this file will be queued for retrieval.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.ru/docs/steps/index.html'" tppabs="http://www.openbsd.ru/docs/steps/index.html"><img height=24 width=24 src="back.gif" tppabs="http://www.openbsd.ru/images/back.gif" alt="OpenBSD.ru"></a>
+<a href="mailto:www@openbsd.ru">www@openbsd.ru</a>
+<br>
+<small>$RuOBSD: stable.html,v 1.9 2010/11/01 10:57:49 dinar Exp $</small>
+
+</body>
+</html>

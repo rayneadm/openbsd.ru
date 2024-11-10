@@ -1,0 +1,154 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=koi8-r">
+<meta http-equiv="Content-Language" content="ru">
+<meta name="copyright" content="Copyright (c) 2005,2008 by OpenBSD.ru">
+<title>Nut: Управление и мониторинг работы ИБП</title>
+<link rel="stylesheet" type="text/css" href="style.css" tppabs="http://www.openbsd.ru/style.css">
+</head>
+
+<body>
+
+<h2>Nut: Управление и мониторинг работы ИБП</h2>
+<hr>
+
+<h3>Мини-руководство "шаг за шагом"</h3>
+
+<p>
+<table border=0>
+<tr><td>
+
+<p>
+Устанавливаем <tt>nut</tt> из портов:
+
+<pre>
+# <strong>cd /usr/ports/sysutils/nut</strong>
+# <strong>env FLAVOR=no_cgi make install clean</strong>
+</pre>
+
+<p>
+Или с помощью прекомпилированного пакета:
+
+<pre>
+# <strong>pkg_add ftp://ftp.openbsd.org/pub/OpenBSD/4.2/packages/i386/nut-2.0.5-main.tgz</strong>
+</pre>
+
+<p>
+Создаем секцию myups с описанием ИБП:
+
+<pre>
+# <strong>vi /etc/nut/ups.conf</strong>
+
+# APC SmartUPS 620 подключен к физическому COM1.
+#
+[myups]
+	driver = apcsmart
+	port = /dev/tty00
+	desc = "Server"
+</pre>
+
+<p>
+Задаем права доступа:
+
+<pre>
+# <strong>vi /etc/nut/upsd.users</strong>
+[admin]
+	password = ups123
+	allowfrom = localhost
+	actions = SET
+	instcmds = ALL
+
+[monuser]
+	password = mon123
+	allowfrom = localhost
+	upsmon master
+</pre>
+
+<p>
+Указываем ИБП, работу которого будем мониторить:
+
+<pre>
+# <strong>vi /etc/nut/upsmon.conf</strong>
+MONITOR myups@localhost 1 monuser mon123 master
+</pre>
+
+<p>
+Загружаем драйвер, предварительно выставив корректные права доступа для
+псевдоустройства <span>/dev/tty00</span>:
+
+<pre>
+# <strong>chown _ups:wheel /dev/tty00</strong>
+# <strong>chmod 600 /dev/tty00</strong>
+# <strong>/usr/local/bin/upsdrvctl start</strong>
+Network UPS Tools - UPS driver controller 2.0.5
+Network UPS Tools (version 2.0.5) - APC Smart protocol driver
+	Driver version 1.99.8, command table version 2.0
+Detected Smart-UPS 620    [NS0150261570] on /dev/tty00
+</pre>
+
+<p>
+Загружаем <tt>upsd</tt>:
+
+<pre>
+# <strong>/usr/local/sbin/upsd</strong>
+Network UPS Tools upsd 2.0.5
+Connected to UPS [myups]: myups
+</pre>
+
+<p>
+Загружаем <tt>upsmon</tt>:
+
+<pre>
+# <strong>/usr/local/sbin/upsmon</strong>
+Network UPS Tools upsmon 2.0.5
+UPS: myups@localhost (master) (power value 1)
+Using power down flag file /etc/killpower
+</pre>
+
+<p>
+Проверяем состояние ИБП:
+
+<pre>
+% <strong>upsc myups@localhost ups.status</strong>
+OL
+</pre>
+
+<p>
+В <span>/etc/rc.local</span> прописываем автозапуск <tt>nut</tt>:
+
+<pre>
+# <strong>vi /etc/rc.local</strong>
+if [ -x /usr/local/bin/upsdrvctl ]; then
+	echo -n ' nut'
+	chown _ups:wheel /dev/tty00
+	chmod 600 /dev/tty00
+	/usr/local/bin/upsdrvctl start &gt; /dev/null 2&gt;&amp;1
+	/usr/local/sbin/upsd &gt; /dev/null 2&gt;&amp;1
+	/usr/local/sbin/upsmon &gt; /dev/null 2&gt;&amp;1
+fi
+</pre>
+
+<p>
+Выключаем питание после того, как данные на дисках будут синхронизированы:
+
+<pre>
+# <strong>vi /etc/rc.shutdown</strong>
+if [ -f /etc/killpower ]; then
+	/usr/local/bin/upsdrvctl shutdown
+	sleep 60
+fi
+</pre>
+
+</td></tr>
+</table>
+
+<p>
+<hr>
+<a href="javascript:if(confirm('http://www.openbsd.ru/docs/steps/index.html  \n\nThis file was not retrieved by Teleport Ultra, because it is linked too far away from its Starting Address. If you increase the in-domain depth setting for the Starting Address, this file will be queued for retrieval.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.ru/docs/steps/index.html'" tppabs="http://www.openbsd.ru/docs/steps/index.html"><img height=24 width=24 src="back.gif" tppabs="http://www.openbsd.ru/images/back.gif" alt="OpenBSD.ru"></a>
+<a href="mailto:www@openbsd.ru">www@openbsd.ru</a>
+<br>
+<small>$RuOBSD: nut.html,v 1.12 2010/11/01 10:57:48 dinar Exp $</small>
+
+</body>
+</html>

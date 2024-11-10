@@ -1,0 +1,84 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+<HEAD>
+  <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=koi8-r">
+  <META HTTP-EQUIV="Content-Language" CONTENT="ru">
+  <META NAME="copyright" CONTENT="Copyright (c) 2005-2006 by OpenBSD.ru">
+  <TITLE>OpenBSD: Сборка дистрибутива</TITLE>
+   <link rel="stylesheet" type="text/css" href="style.css" tppabs="http://www.openbsd.ru/style.css">
+</HEAD>
+<BODY>
+
+<H2>OpenBSD: Сборка дистрибутива</H2>
+<HR>
+
+<H3>Мини-руководство "шаг за шагом"</H3>
+
+<P>
+<TABLE BORDER="0">
+<TR>
+<TD>
+В первую очередь пересобираем программы
+<A HREF="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=crunchgen&sektion=1  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=crunchgen&sektion=1'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=crunchgen&sektion=1">
+crunchgen(1)</A> и
+<A HREF="javascript:if(confirm('http://www.openbsd.org/cgi-bin/man.cgi?query=crunchhide&sektion=1  \n\nThis file was not retrieved by Teleport Ultra, because it is addressed on a domain or path outside the boundaries set for its Starting Address.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.org/cgi-bin/man.cgi?query=crunchhide&sektion=1'" tppabs="http://www.openbsd.org/cgi-bin/man.cgi?query=crunchhide&sektion=1">
+crunchide(1).</A>
+<I>Данный шаг не требуется для OpenBSD &gt; 4.4</I>.
+
+<PRE>
+# <STRONG>cd /usr/src/distrib/crunch</STRONG>
+# <STRONG>make obj</STRONG>
+# <STRONG>make depend</STRONG>
+# <STRONG>make</STRONG>
+# <STRONG>make install</STRONG>
+</PRE>
+
+С помощью переменных окружения указываем абсолютные пути до каталогов:
+
+<PRE>
+# <STRONG>export DESTDIR=/home/openbsd/dest</STRONG>
+# <STRONG>export RELEASEDIR=/home/openbsd/release</STRONG>
+</PRE>
+
+Создаем необходимые директории:
+
+<PRE>
+# <STRONG>mkdir -p ${DESTDIR} ${RELEASEDIR}</STRONG>
+</PRE>
+
+Переходим в каталог <span>/usr/src/etc</span> и выполняем
+сборку дистрибутива:
+
+<PRE>
+# <STRONG>cd /usr/src/etc &amp;&amp; make release</STRONG>
+</PRE>
+
+Шаг с проверкой полученного списка файлов является необязательным:
+
+<PRE>
+# <STRONG>cd /usr/src/distrib/sets && sh checkflist</STRONG>
+</PRE>
+
+При необходимости указанные переменные окружения можно удалить:
+
+<PRE>
+# <STRONG>unset DESTDIR RELEASEDIR CVSROOT</STRONG>
+</PRE>
+
+Смотрите также по данной теме пошаговое <A HREF="burncd.html" tppabs="http://www.openbsd.ru/docs/steps/burncd.html">
+руководство</A>, в котором рассматривается процесс создания дистрибутивного CD.
+
+</TD>
+</TR>
+</TABLE>
+
+<P>
+<HR>
+<A HREF="javascript:if(confirm('http://www.openbsd.ru/docs/steps/index.html  \n\nThis file was not retrieved by Teleport Ultra, because it is linked too far away from its Starting Address. If you increase the in-domain depth setting for the Starting Address, this file will be queued for retrieval.  \n\nDo you want to open it from the server?'))window.location='http://www.openbsd.ru/docs/steps/index.html'" tppabs="http://www.openbsd.ru/docs/steps/index.html"><IMG HEIGHT="24" WIDTH="24" SRC="back.gif" tppabs="http://www.openbsd.ru/images/back.gif"
+ ALT="OpenBSD.ru"></A>
+<A HREF="mailto:www@openbsd.ru">www@openbsd.ru</A>
+<BR>
+<SMALL>$RuOBSD: release.html,v 1.21 2010/11/01 10:57:49 dinar Exp $</SMALL>
+
+</BODY>
+</HTML>
