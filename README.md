@@ -1,4 +1,4 @@
-Зеркало архива [OpenBSD.ru](./openbsd_pb.gif)
+Зеркало архива [OpenBSD.ru](openbsd_pb.gif)
 
 🌐 Дань уважения легендарному ресурсу
 
@@ -18,7 +18,7 @@
 
 ---
 
-OpenBSD.ru Archive Mirror [OpenBSD.ru](./openbsd_pb.gif)
+OpenBSD.ru Archive Mirror [OpenBSD.ru](openbsd_pb.gif)
 
 🌐 A Tribute to a Legendary Resource
 
